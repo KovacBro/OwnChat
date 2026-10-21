@@ -130,7 +130,8 @@ OwnChat follows SemVer.
 - Old releases are never deleted or overwritten.
 - Every minor release is published on GitHub Releases; the repository sidebar points to the latest minor.
 
-See [docs/RELEASING.md](docs/RELEASING.md) for the release checklist.
+See [CHANGELOG.md](CHANGELOG.md) for released versions and
+[docs/RELEASING.md](docs/RELEASING.md) for the release checklist.
 
 ## Roadmap
 
