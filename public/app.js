@@ -15,7 +15,6 @@ const state = {
   providers: [],
   personas: [],
   conversations: [],
-  workbuddy: { cn: null, global: null },
   view: "chat",
   activeId: null,
   messages: {},
@@ -32,105 +31,277 @@ const state = {
   emojiOpen: false,
   avatarStudio: null,
   pendingFiles: false,
-  download: null,
-  downloadTimer: null,
 };
 
 const PRESETS = {
-  qiusuo: {
-    name: "求索",
-    baseUrl: "https://api.deepseek.com/v1",
-    model: "deepseek-chat",
-    role: "通用对话与写作",
-    note: "中文强、按量计费、模型少而稳",
-    platform: true,
+  deepseek: {
+    name: "DeepSeek",
+    group: "国内直连",
+    baseUrl: "https://api.deepseek.com",
+    model: "deepseek-flash",
+    models: [
+      { id: "deepseek-flash", name: "DeepSeek V4.1 Flash", contextWindow: 128000, maxTokens: 8192 },
+      { id: "deepseek-v4-pro", name: "DeepSeek V4 Pro", contextWindow: 128000, maxTokens: 8192 },
+    ],
+    keyUrl: "https://platform.deepseek.com/api_keys",
+    docsUrl: "https://api-docs.deepseek.com/zh-cn/",
+    note: "官方 API，按量计费",
+    steps: [
+      "打开 DeepSeek 开放平台，注册并完成实名认证。",
+      "进入「API Keys」创建密钥，复制以 sk- 开头的字符串。",
+      "把密钥粘贴到下面。保存后 OwnChat 会自动读取当前可用模型。",
+    ],
   },
   bailian: {
-    name: "百炼",
+    name: "阿里云百炼",
+    group: "国内直连",
     baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
     model: "qwen-plus",
-    role: "长上下文与多模态",
-    note: "通义千问全系，长文档、图片、企业级稳定",
-    platform: true,
+    models: [
+      { id: "qwen-plus", name: "Qwen Plus", contextWindow: 131072, maxTokens: 8192 },
+      { id: "qwen-max", name: "Qwen Max", contextWindow: 32768, maxTokens: 8192 },
+      { id: "qwen-vl-max", name: "Qwen VL Max", contextWindow: 32768, maxTokens: 8192, vision: true },
+      { id: "qwen-turbo", name: "Qwen Turbo", contextWindow: 131072, maxTokens: 8192 },
+    ],
+    keyUrl: "https://bailian.console.aliyun.com/?apiKey=1",
+    docsUrl: "https://help.aliyun.com/zh/model-studio/developer-reference/compatibility-of-openai-with-dashscope",
+    note: "通义千问全系，兼容 OpenAI",
+    steps: [
+      "登录阿里云百炼控制台，开通模型服务。",
+      "在「API-KEY 管理」里创建密钥。",
+      "把密钥粘贴到下面。Base URL 已经填好，不需要改。",
+    ],
   },
-  fangzhou: {
-    name: "方舟",
+  ark: {
+    name: "火山方舟",
+    group: "国内直连",
     baseUrl: "https://ark.cn-beijing.volces.com/api/v3",
     model: "",
-    role: "豆包系列 · 角色与语音",
-    note: "需先在方舟控制台创建推理接入点，模型名填 ep- 开头",
-    platform: true,
-  },
-  openrouter: {
-    name: "OpenRouter",
-    baseUrl: "https://openrouter.ai/api/v1",
-    model: "",
-    note: "部分 :free 模型；需注册 Key",
-  },
-  gemini: {
-    name: "Google Gemini",
-    baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai/",
-    model: "",
-    note: "Flash 系列有免费额度；限流",
-  },
-  groq: {
-    name: "Groq",
-    baseUrl: "https://api.groq.com/openai/v1",
-    model: "",
-    note: "免费层；限流",
-  },
-  siliconflow: {
-    name: "硅基流动",
-    baseUrl: "https://api.siliconflow.cn/v1",
-    model: "",
-    note: "注册赠送额度 / 部分免费模型",
+    models: [],
+    keyUrl: "https://console.volcengine.com/ark/region:ark+cn-beijing/apiKey",
+    docsUrl: "https://www.volcengine.com/docs/82379/1099522",
+    note: "豆包系列，需要先创建推理接入点",
+    steps: [
+      "登录火山方舟控制台，开通模型服务。",
+      "在「API Key 管理」创建密钥。",
+      "在「在线推理」创建接入点，复制 ep- 开头的接入点 ID。",
+      "把密钥和接入点 ID 分别填到下面两个输入框。",
+    ],
   },
   zhipu: {
     name: "智谱 BigModel",
+    group: "国内直连",
     baseUrl: "https://open.bigmodel.cn/api/paas/v4",
-    model: "",
-    note: "GLM-Flash 系列曾有免费额度",
+    model: "glm-5.3-flash",
+    models: [
+      { id: "glm-5.3", name: "GLM-5.3", contextWindow: 200000, maxTokens: 8192 },
+      { id: "glm-5.3-flash", name: "GLM-5.3 Flash", contextWindow: 200000, maxTokens: 8192 },
+      { id: "glm-4.5-air", name: "GLM-4.5 Air", contextWindow: 128000, maxTokens: 8192 },
+    ],
+    keyUrl: "https://bigmodel.cn/usercenter/proj-mgmt/apikeys",
+    docsUrl: "https://docs.bigmodel.cn/cn/guide/develop/openai/introduction",
+    note: "GLM 系列，兼容 OpenAI",
+    steps: [
+      "登录智谱开放平台，完成实名认证。",
+      "在「API Keys」里创建密钥。",
+      "把密钥粘贴到下面。保存后会自动读取模型列表。",
+    ],
   },
-  modelscope: {
-    name: "ModelScope",
-    baseUrl: "https://api-inference.modelscope.cn/v1",
+  moonshot: {
+    name: "Kimi",
+    group: "国内直连",
+    baseUrl: "https://api.moonshot.cn/v1",
+    model: "kimi-k3",
+    models: [
+      { id: "kimi-k3", name: "Kimi K3", contextWindow: 256000, maxTokens: 8192 },
+      { id: "kimi-k2.5", name: "Kimi K2.5", contextWindow: 256000, maxTokens: 8192 },
+    ],
+    keyUrl: "https://platform.kimi.com/console/api-keys",
+    docsUrl: "https://platform.kimi.com/docs/api/overview",
+    note: "Kimi 系列，长上下文",
+    steps: [
+      "登录 Kimi 开放平台，进入控制台。",
+      "在「API Key 管理」里创建密钥。",
+      "把密钥粘贴到下面。Base URL 保持默认即可。",
+    ],
+  },
+  hunyuan: {
+    name: "腾讯混元",
+    group: "国内直连",
+    baseUrl: "https://api.hunyuan.cloud.tencent.com/v1",
+    model: "hunyuan-turbos-latest",
+    models: [
+      { id: "hunyuan-turbos-latest", name: "混元 Turbo S", contextWindow: 128000, maxTokens: 8192 },
+      { id: "hunyuan-vision", name: "混元 Vision", contextWindow: 32768, maxTokens: 8192, vision: true },
+    ],
+    keyUrl: "https://console.cloud.tencent.com/hunyuan/start",
+    docsUrl: "https://cloud.tencent.com/document/product/1729/111007",
+    note: "腾讯云混元，OpenAI 兼容",
+    steps: [
+      "登录腾讯云，开通混元大模型服务。",
+      "进入「API Key 管理」创建密钥。",
+      "把密钥粘贴到下面。保存后会自动读取模型列表。",
+    ],
+  },
+  siliconflow: {
+    name: "硅基流动",
+    group: "国内直连",
+    baseUrl: "https://api.siliconflow.cn/v1",
+    model: "Qwen/Qwen3-8B",
+    models: [
+      { id: "Qwen/Qwen3-8B", name: "Qwen3 8B", contextWindow: 32768, maxTokens: 8192 },
+      { id: "deepseek-ai/DeepSeek-V3.2", name: "DeepSeek V3.2", contextWindow: 128000, maxTokens: 8192 },
+    ],
+    keyUrl: "https://cloud.siliconflow.cn/account/ak",
+    docsUrl: "https://docs.siliconflow.cn/cn/api-reference/chat-completions/chat-completions",
+    note: "聚合多家开源模型",
+    steps: [
+      "注册硅基流动账号，完成实名认证。",
+      "在「API 密钥」页面新建密钥。",
+      "把密钥粘贴到下面。保存后会自动读取可用模型。",
+    ],
+  },
+  openrouter: {
+    name: "OpenRouter",
+    group: "海外直连",
+    baseUrl: "https://openrouter.ai/api/v1",
     model: "",
-    note: "每日免费调用额度",
+    models: [],
+    keyUrl: "https://openrouter.ai/keys",
+    docsUrl: "https://openrouter.ai/docs/quickstart",
+    note: "一个 Key 调多家海外模型",
+    steps: [
+      "注册 OpenRouter，进入 Keys 页面。",
+      "创建一个 API Key，复制保存。",
+      "把 Key 粘贴到下面。保存后会自动读取模型列表。",
+    ],
+  },
+  gemini: {
+    name: "Google Gemini",
+    group: "海外直连",
+    baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai/",
+    model: "gemini-2.5-flash",
+    models: [
+      { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash", contextWindow: 1048576, maxTokens: 8192 },
+      { id: "gemini-2.5-pro", name: "Gemini 2.5 Pro", contextWindow: 1048576, maxTokens: 8192 },
+    ],
+    keyUrl: "https://aistudio.google.com/apikey",
+    docsUrl: "https://ai.google.dev/gemini-api/docs/openai",
+    note: "Google AI Studio 的 OpenAI 兼容入口",
+    steps: [
+      "打开 Google AI Studio，登录 Google 账号。",
+      "点击「Get API key」创建密钥。",
+      "把密钥粘贴到下面。需要能访问 Google 的网络环境。",
+    ],
+  },
+  groq: {
+    name: "Groq",
+    group: "海外直连",
+    baseUrl: "https://api.groq.com/openai/v1",
+    model: "llama-3.3-70b-versatile",
+    models: [
+      { id: "llama-3.3-70b-versatile", name: "Llama 3.3 70B", contextWindow: 131072, maxTokens: 8192 },
+      { id: "openai/gpt-oss-120b", name: "GPT OSS 120B", contextWindow: 131072, maxTokens: 8192 },
+    ],
+    keyUrl: "https://console.groq.com/keys",
+    docsUrl: "https://console.groq.com/docs/openai",
+    note: "低延迟推理，有免费额度",
+    steps: [
+      "注册 Groq Console。",
+      "在「API Keys」里创建密钥。",
+      "把密钥粘贴到下面。保存后会自动读取模型列表。",
+    ],
   },
   mistral: {
     name: "Mistral",
+    group: "海外直连",
     baseUrl: "https://api.mistral.ai/v1",
-    model: "",
-    note: "Experiment 免费计划；限流",
-  },
-  cerebras: {
-    name: "Cerebras",
-    baseUrl: "https://api.cerebras.ai/v1",
-    model: "",
-    note: "免费层；限流",
+    model: "mistral-large-latest",
+    models: [
+      { id: "mistral-large-latest", name: "Mistral Large", contextWindow: 128000, maxTokens: 8192 },
+      { id: "mistral-small-latest", name: "Mistral Small", contextWindow: 128000, maxTokens: 8192 },
+    ],
+    keyUrl: "https://console.mistral.ai/api-keys",
+    docsUrl: "https://docs.mistral.ai/",
+    note: "Mistral 官方 API",
+    steps: [
+      "注册 Mistral 控制台。",
+      "在「API Keys」里创建密钥。",
+      "把密钥粘贴到下面。保存后会自动读取模型列表。",
+    ],
   },
   github: {
     name: "GitHub Models",
+    group: "海外直连",
     baseUrl: "https://models.github.ai/inference",
-    model: "",
-    note: "GitHub Token；免费额度",
+    model: "openai/gpt-4.1-mini",
+    models: [
+      { id: "openai/gpt-4.1-mini", name: "GPT-4.1 mini", contextWindow: 128000, maxTokens: 8192 },
+    ],
+    keyUrl: "https://github.com/settings/tokens",
+    docsUrl: "https://docs.github.com/en/github-models",
+    note: "用 GitHub Token 调用，有免费额度",
+    steps: [
+      "登录 GitHub，进入 Settings → Developer settings → Personal access tokens。",
+      "创建一个 fine-grained token，授予 Models 读取权限。",
+      "把 Token 粘贴到下面。注意不要勾选无关的仓库权限。",
+    ],
   },
   ollama: {
     name: "Ollama 本地",
+    group: "本地与自建",
     baseUrl: "http://127.0.0.1:11434/v1",
+    model: "qwen3:8b",
+    models: [
+      { id: "qwen3:8b", name: "Qwen3 8B", contextWindow: 32768, maxTokens: 8192 },
+      { id: "llama3.2", name: "Llama 3.2", contextWindow: 131072, maxTokens: 8192 },
+    ],
+    requiresKey: false,
+    keyUrl: "https://ollama.com/download",
+    docsUrl: "https://docs.ollama.com/api/openai-compatibility",
+    note: "本机运行，不需要 API Key",
+    steps: [
+      "从 ollama.com 安装 Ollama。",
+      "在终端执行 ollama pull qwen3:8b 下载模型。",
+      "确认 Ollama 正在运行，然后保存。OwnChat 会读取本机模型列表。",
+    ],
+  },
+  azure: {
+    name: "Azure OpenAI",
+    group: "本地与自建",
+    baseUrl: "",
     model: "",
-    note: "本地模型，无需 Key",
+    models: [],
+    protocol: "azure",
+    keyUrl: "https://portal.azure.com/",
+    docsUrl: "https://learn.microsoft.com/azure/ai-services/openai/",
+    note: "企业部署，需要资源和部署名",
+    steps: [
+      "在 Azure 门户创建 Azure OpenAI 资源，并部署模型。",
+      "在「Keys and Endpoint」里复制 Key 和 Endpoint。",
+      "把 Endpoint 填到高级设置，Key 填到下面，再填部署名。",
+    ],
   },
   custom: {
     name: "自定义接口",
+    group: "本地与自建",
     baseUrl: "",
     model: "",
-    note: "任意 OpenAI 兼容 API",
+    models: [],
+    note: "任意 OpenAI 兼容服务",
+    requiresKey: false,
+    steps: [
+      "确认服务兼容 OpenAI 的 /chat/completions。",
+      "把 Base URL 填到高级设置，通常以 /v1 结尾。",
+      "有 Key 就填，没有就留空。保存后可以手动拉取模型。",
+    ],
   },
 };
 
-// 平台直连：独立于「娘」人格存在的三个预设入口
-const PLATFORM_PRESETS = ["qiusuo", "bailian", "fangzhou"];
+const PRESET_GROUPS = ["国内直连", "海外直连", "本地与自建"];
+
+// 新建会话页只放最常用的四个入口，完整列表在「API 接口」页。
+const PLATFORM_PRESETS = ["deepseek", "bailian", "zhipu", "moonshot"];
 
 const AVATAR_PROMPTS = {
   deepseek: {
@@ -196,6 +367,21 @@ function modelOf(provider, modelId) {
   return (provider?.models || []).find((m) => m.id === modelId);
 }
 
+function presetModels(preset) {
+  const list = Array.isArray(preset?.models) ? preset.models : [];
+  return list.map((model) => ({
+    id: model.id,
+    name: model.name || model.id,
+    contextWindow: Number(model.contextWindow) || 128000,
+    maxTokens: Number(model.maxTokens) || 4096,
+    ...(model.vision ? { vision: true } : {}),
+  }));
+}
+
+function presetByKey(key) {
+  return PRESETS[key] || null;
+}
+
 function modelName(provider, modelId) {
   return modelOf(provider, modelId)?.name || modelId || "未选择模型";
 }
@@ -212,6 +398,25 @@ function providerOf(id) {
   return state.providers.find((p) => p.id === id);
 }
 
+function providerForPersona(persona) {
+  if (!persona) return null;
+  const bound = providerOf(persona.providerId);
+  if (bound) return bound;
+  const preferred = state.providers.find((provider) => provider.preset === persona.preferredPreset);
+  if (preferred && providerReady(preferred)) return preferred;
+  const ready = state.providers.find((provider) => provider.enabled !== false && providerReady(provider));
+  return ready || preferred || null;
+}
+
+function modelForPersona(persona, provider) {
+  if (!provider) return null;
+  if (persona?.modelId) {
+    const exact = modelOf(provider, persona.modelId);
+    if (exact) return exact;
+  }
+  return (provider.models || [])[0] || null;
+}
+
 function personaOf(id) {
   return state.personas.find((p) => p.id === id) || state.personas[0];
 }
@@ -221,20 +426,17 @@ function convOf(id) {
 }
 
 function providerReady(provider) {
-  if (!provider) return false;
-  if (provider.kind === "workbuddy") return Boolean(provider.status?.signedIn);
-  return Boolean(provider.baseUrl);
+  if (!provider || provider.enabled === false || !provider.baseUrl) return false;
+  if (provider.preset === "ollama" || provider.requiresKey === false) return true;
+  return Boolean(provider.hasKey);
 }
 
 function providerStatusText(provider) {
   if (!provider) return "未配置";
-  if (provider.kind === "workbuddy") {
-    if (!provider.status) return "检测中…";
-    if (!provider.status.available) return "插件不可用";
-    if (!provider.status.signedIn) return "未登录";
-    return `已连接 · ${provider.status.account?.name || "WorkBuddy"}`;
-  }
-  return provider.enabled === false ? "已停用" : "已配置";
+  if (provider.enabled === false) return "已停用";
+  if (!provider.baseUrl) return "未填写地址";
+  if (provider.preset === "ollama" || provider.requiresKey === false) return "已配置";
+  return provider.hasKey ? "已配置" : "待填 Key";
 }
 
 function formatTime(ts) {
@@ -288,10 +490,20 @@ function md(text) {
   return value;
 }
 
+function sessionToken() {
+  return $('meta[name="ownchat-token"]')?.getAttribute("content") || "";
+}
+
 async function api(path, options = {}) {
+  const token = sessionToken();
+  const headers = {
+    ...(options.body ? { "Content-Type": "application/json" } : {}),
+    ...(token ? { "X-OwnChat-Token": token } : {}),
+    ...(options.headers || {}),
+  };
   const response = await fetch(path, {
-    headers: options.body ? { "Content-Type": "application/json", ...(options.headers || {}) } : options.headers,
     ...options,
+    headers,
   });
   const type = response.headers.get("content-type") || "";
   const data = type.includes("application/json") ? await response.json() : await response.text();
@@ -362,24 +574,22 @@ async function init() {
     state.providers = boot.providers || [];
     state.personas = boot.personas || [];
     state.conversations = boot.conversations || [];
-    state.workbuddy = boot.workbuddy || { cn: null, global: null };
-    state.download = boot.download || null;
     if (state.conversations.length) {
       state.activeId = state.conversations[0].id;
       await loadMessages(state.activeId);
     }
     applyTheme();
     renderAll();
-    setTimeout(refreshWorkBuddyModels, 400);
     setTimeout(() => checkForUpdates(false), 1800);
   } catch (error) {
     $("#main").innerHTML = `<div class="empty-chat"><div class="notice red">加载失败：${esc(error.message)}</div></div>`;
   }
   setInterval(() => {
-    fetch("/api/ping", { method: "POST" }).catch(() => {});
+    api("/api/ping", { method: "POST" }).catch(() => {});
   }, 5000);
   window.addEventListener("beforeunload", () => {
-    navigator.sendBeacon?.("/api/app/closed", "1");
+    const token = encodeURIComponent(sessionToken());
+    navigator.sendBeacon?.(`/api/app/closed?token=${token}`, "1");
   });
 }
 
@@ -499,46 +709,15 @@ function renderSidebar() {
 
 function renderSidebarFoot() {
   const root = $("#sidebarFoot");
-  const cn = state.workbuddy?.cn;
-  if (cn?.signedIn) {
-    root.innerHTML = `<i class="dot"></i><span>${esc(cn.account?.name || "已登录")}${cn.account?.domain ? ` · ${esc(cn.account.domain)}` : ""}</span><button data-detect-wb>刷新</button>`;
-    $("[data-detect-wb]", root).onclick = detectWorkBuddy;
-    return;
-  }
   const ready = state.providers.filter((provider) => provider.enabled !== false && providerReady(provider));
   const label = ready.length
     ? `${ready[0].name} · ${(ready[0].models || []).length} 个模型`
     : "还没有可用接口";
-  root.innerHTML = `<i class="dot ${ready.length ? "" : "off"}"></i><span>${esc(label)}</span><button data-detect-wb>刷新</button>`;
-  $("[data-detect-wb]", root).onclick = detectWorkBuddy;
-}
-
-async function detectWorkBuddy() {
-  try {
-    const data = await api("/api/workbuddy/status");
-    state.workbuddy = data;
-    toast(data.cn?.signedIn ? `WorkBuddy 已连接：${data.cn.account?.name || ""}` : "未检测到 WorkBuddy 登录态", data.cn?.signedIn ? "ok" : "err");
-    const boot = await api("/api/bootstrap");
-    state.providers = boot.providers || [];
+  root.innerHTML = `<i class="dot ${ready.length ? "" : "off"}"></i><span>${esc(label)}</span><button data-open-providers>配置</button>`;
+  $("[data-open-providers]", root).onclick = () => {
+    state.view = "providers";
     renderAll();
-  } catch (error) {
-    toast(error.message, "err");
-  }
-}
-
-async function refreshWorkBuddyModels() {
-  for (const provider of state.providers.filter((p) => p.kind === "workbuddy" && p.status?.signedIn)) {
-    try {
-      const result = await api("/api/workbuddy/models", {
-        method: "POST",
-        body: JSON.stringify({ region: provider.region, refresh: false }),
-      });
-      provider.models = result.models || provider.models;
-      provider.modelsFetchedAt = Date.now();
-    } catch {}
-  }
-  renderMain();
-  renderSidebar();
+  };
 }
 
 /* ---------- navigation ---------- */
@@ -584,16 +763,18 @@ function renderEmptyChat() {
     .filter((p) => !p.hidden)
     .slice(0, 6)
     .map((p) => {
-      const provider = providerOf(p.providerId);
+      const provider = providerForPersona(p);
+      const model = modelForPersona(p, provider);
+      const ready = providerReady(provider) && Boolean(model);
       return `
         <button class="persona-start" data-start-persona="${p.id}">
           ${avatarHTML(p.avatar, p.name, "avatar")}
           <strong>${esc(p.name)}</strong>
-          <span>${esc(modelName(provider, p.modelId))}${provider?.kind === "workbuddy" && !provider.status?.signedIn ? " · 未连接" : ""}</span>
+          <span>${esc(model ? model.name : "待配置模型")}${ready ? "" : " · 未连接"}</span>
         </button>`;
     })
     .join("");
-  const online = state.workbuddy?.cn?.signedIn;
+  const hasProvider = state.providers.some((provider) => provider.enabled !== false && providerReady(provider));
   $("#main").innerHTML = `
     <div class="empty-chat">
       <div class="empty-logo"><svg><use href="#i-chat"/></svg></div>
@@ -605,7 +786,7 @@ function renderEmptyChat() {
         <span><kbd>Shift</kbd> + <kbd>Enter</kbd> 换行</span>
         <span><kbd>Ctrl</kbd> + <kbd>N</kbd> 新对话</span>
       </div>
-      ${online ? "" : `<div class="notice" style="margin-top:20px;max-width:560px">WorkBuddy 尚未连接。可以到「API 接口」检查本地 WorkBuddy，或添加一个免费 / 自定义接口。</div>`}
+      ${hasProvider ? "" : `<div class="notice" style="margin-top:20px;max-width:560px">还没有配置模型接口。到「API 接口」选一个服务商，填入自己的 API Key 就能开始。</div>`}
     </div>`;
   $$("[data-start-persona]").forEach((button) => {
     button.onclick = () => createConversation(button.dataset.startPersona);
@@ -842,6 +1023,12 @@ async function sendMessage() {
   const conversation = convOf(state.activeId);
   if (!conversation) return;
   if (state.streaming[conversation.id]) return;
+  const provider = providerOf(conversation.providerId);
+  if (!conversation.providerId || !conversation.modelId || !providerReady(provider)) {
+    openModelPicker();
+    toast("先选择一个可用的模型", "err");
+    return;
+  }
   const input = $("#composerInput");
   const content = (input?.value || "").trim();
   const images = state.attachments.slice();
@@ -897,7 +1084,7 @@ async function streamIntoConversation(conversation, { content, images, tempAssis
   try {
     const response = await fetch("/api/chat", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "X-OwnChat-Token": sessionToken() },
       body: JSON.stringify({
         conversationId: conversation.id,
         content,
@@ -1037,7 +1224,7 @@ async function retryLast(conversationId) {
   renderChat();
   const response = await fetch("/api/chat", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "X-OwnChat-Token": sessionToken() },
     body: JSON.stringify({ conversationId, retry: true }),
     signal: state.streaming[conversationId].controller.signal,
   }).catch((error) => {
@@ -1135,8 +1322,8 @@ function openModelPicker() {
             return `
             <div class="model-row">
               <button class="template" data-pick-model="${esc(model.id)}" data-pick-provider="${esc(provider.id)}" ${providerReady(provider) ? "" : "disabled"}>
-                <span class="t-icon" style="background:${provider.kind === "workbuddy" ? "#e8f7ef" : "#f0f0f3"};color:${provider.kind === "workbuddy" ? "#0d8051" : "#666"}">${esc(initialOf(model.name))}</span>
-                <span style="min-width:0"><strong>${esc(model.name)}</strong><span>${esc(model.id)}${caps.length ? ` · ${esc(caps.join(" · "))}` : ""}${model.creditMultiplier ? ` · x${model.creditMultiplier}` : ""}</span></span>
+                <span class="t-icon" style="background:#f0f0f3;color:#666">${esc(initialOf(model.name))}</span>
+                <span style="min-width:0"><strong>${esc(model.name)}</strong><span>${esc(model.id)}${caps.length ? ` · ${esc(caps.join(" · "))}` : ""}</span></span>
                 ${conversation.modelId === model.id && conversation.providerId === provider.id ? `<span class="tag green" style="margin-left:auto">当前</span>` : ""}
               </button>
               <button class="icon-btn model-cfg" data-cfg-model="${esc(model.id)}" data-cfg-provider="${esc(provider.id)}" title="模型能力"><svg><use href="#i-gear"/></svg></button>
@@ -1195,12 +1382,13 @@ function openNewChat() {
   const personaCards = state.personas
     .filter((persona) => !persona.hidden)
     .map((persona) => {
-      const provider = providerOf(persona.providerId);
-      const ready = providerReady(provider);
+      const provider = providerForPersona(persona);
+      const model = modelForPersona(persona, provider);
+      const ready = providerReady(provider) && Boolean(model);
       return `
         <button class="template" data-new-persona="${persona.id}" style="padding:12px">
           ${avatarHTML(persona.avatar, persona.name, "avatar")}
-          <span style="min-width:0"><strong>${esc(persona.name)}</strong><span>${esc(modelName(provider, persona.modelId))}${ready ? "" : " · 未连接"}</span></span>
+          <span style="min-width:0"><strong>${esc(persona.name)}</strong><span>${esc(model ? model.name : "待配置模型")}${ready ? "" : " · 未连接"}</span></span>
         </button>`;
     })
     .join("");
@@ -1214,7 +1402,7 @@ function openNewChat() {
     return `
       <button class="template platform-card" data-platform="${key}">
         <span class="t-icon" style="background:#e8f7ef;color:#0d8051">${esc(initialOf(preset.name))}</span>
-        <span style="min-width:0"><strong>${esc(preset.name)}</strong><span>${esc(preset.role)}</span></span>
+        <span style="min-width:0"><strong>${esc(preset.name)}</strong><span>${esc(preset.note)}</span></span>
         <span class="tag ${ready && count ? "green" : ""}" style="margin-left:auto">${esc(badge)}</span>
       </button>`;
   }).join("");
@@ -1328,13 +1516,23 @@ async function createConversationForModel(providerId, modelId) {
 
 async function createConversation(personaId) {
   const persona = personaOf(personaId);
+  const provider = providerForPersona(persona);
+  const model = modelForPersona(persona, provider);
+  if (!provider || !model || !providerReady(provider)) {
+    closeModal();
+    state.view = "providers";
+    renderAll();
+    openAddProvider();
+    toast("先配置一个模型接口，再开始聊天", "err");
+    return;
+  }
   try {
     const data = await api("/api/conversations", {
       method: "POST",
       body: JSON.stringify({
         personaId: personaId,
-        providerId: persona.providerId,
-        modelId: persona.modelId,
+        providerId: provider.id,
+        modelId: model.id,
       }),
     });
     state.conversations.unshift(data.conversation);
@@ -1531,184 +1729,66 @@ function compressImage(file) {
 }
 
 /* ---------- providers ---------- */
-function formatEta(seconds) {
-  if (!Number.isFinite(seconds) || seconds <= 0) return "";
-  const total = Math.round(seconds);
-  const m = Math.floor(total / 60);
-  const s = total % 60;
-  return m > 0 ? `${m} 分 ${String(s).padStart(2, "0")} 秒` : `${s} 秒`;
-}
-
-function downloadStateLabel(download) {
-  if (!download) return "正在读取下载状态…";
-  if (download.state === "downloading") {
-    const eta = formatEta(download.eta);
-    return `下载中 ${download.percent}% · ${download.receivedLabel} / ${download.totalLabel || "…"}${download.speedLabel ? ` · ${download.speedLabel}` : ""}${eta ? ` · 剩余 ${eta}` : ""}`;
-  }
-  if (download.state === "verifying") return `下载完成 · 正在校验 SHA-256 与数字签名…`;
-  if (download.state === "paused") return `已暂停 · ${download.receivedLabel} / ${download.totalLabel || "…"}，可继续下载`;
-  if (download.state === "done") {
-    const sig = download.signature?.status;
-    const sigText = sig === "Valid" ? "签名有效" : sig ? `签名 ${sig}` : "签名未校验";
-    return `已下载 · ${download.receivedLabel} · ${sigText}`;
-  }
-  if (download.state === "error") return `下载失败：${download.error || "未知错误"}`;
-  return `未下载 · 官方 Windows 安装包 ${download.version || "5.8.3"} · 约 421.6 MB`;
-}
-
-function renderDownloadCard() {
-  const d = state.download;
-  const phase = d?.state || "idle";
-  const active = phase === "downloading" || phase === "verifying";
-  const done = phase === "done";
-  const pct = Math.max(0, Math.min(100, Number(d?.percent) || 0));
-  const sig = d?.signature?.status;
-  const sigBad = done && sig && sig !== "Valid";
-  const pathLabel = d?.dir || "E:\\OwnChat\\downloads\\WorkBuddy";
+function presetCardHTML(key, preset) {
+  const provider = platformProvider(key);
+  const badge = provider ? (provider.hasKey || provider.requiresKey === false ? "已配置" : "待填 Key") : "未配置";
   return `
-    <div class="card provider-card download-card" id="wbDownloadCard">
-      <div class="p-icon" style="background:#e8f7ef;color:#0d8051"><svg><use href="#i-download"/></svg></div>
-      <div class="p-main">
-        <div class="p-name">WorkBuddy 客户端 <span class="tag green">官方</span> <span class="tag">v${esc(d?.version || "5.8.3")}</span>
-          ${done ? `<span class="tag green">已下载</span>` : ""}
-          ${sigBad ? `<span class="tag amber">签名 ${esc(sig)}</span>` : ""}
-        </div>
-        <div class="p-sub">${esc(downloadStateLabel(d))}</div>
-        <div class="download-progress"><i style="width:${pct}%"></i></div>
-        <div class="download-meta"><span>${esc(pathLabel)}</span>${d?.sha256 && done ? `<span>SHA-256 ${esc(d.sha256.slice(0, 16))}…</span>` : ""}</div>
-      </div>
-      <div class="p-actions download-actions">
-        ${active ? `<button class="btn small" data-dl-cancel>暂停</button>` : ""}
-        ${done
-          ? `<button class="btn small primary" data-dl-run>运行安装包</button><button class="btn small" data-dl-open>打开文件夹</button>`
-          : `<button class="btn small primary" data-dl-start>${phase === "paused" || phase === "error" ? "继续下载" : "下载"}</button>`}
-        <button class="btn small ghost" data-dl-page>官方页面</button>
-      </div>
-    </div>`;
-}
-
-function bindDownloadUI(root = document) {
-  $("[data-dl-start]", root)?.addEventListener("click", async () => {
-    try {
-      state.download = await api("/api/downloads/workbuddy/start", { method: "POST" });
-      updateDownloadCard();
-      scheduleDownloadPoll();
-    } catch (error) {
-      toast(error.message, "err");
-    }
-  });
-  $("[data-dl-cancel]", root)?.addEventListener("click", async () => {
-    try {
-      state.download = await api("/api/downloads/workbuddy/cancel", { method: "POST" });
-      updateDownloadCard();
-    } catch (error) {
-      toast(error.message, "err");
-    }
-  });
-  $("[data-dl-open]", root)?.addEventListener("click", async () => {
-    try {
-      await api("/api/downloads/workbuddy/open", { method: "POST" });
-      toast("已打开下载文件夹", "ok");
-    } catch (error) {
-      toast(error.message, "err");
-    }
-  });
-  $("[data-dl-run]", root)?.addEventListener("click", async () => {
-    try {
-      await api("/api/downloads/workbuddy/run", { method: "POST" });
-      toast("安装程序已启动", "ok");
-    } catch (error) {
-      toast(error.message, "err");
-    }
-  });
-  $("[data-dl-page]", root)?.addEventListener("click", () => {
-    const url = state.download?.page || "https://www.workbuddy.cn/docs/workbuddy/Download-History";
-    window.open(url, "_blank", "noopener");
-  });
-}
-
-function updateDownloadCard() {
-  if (state.view !== "providers") return;
-  const old = $("#wbDownloadCard");
-  if (!old) return;
-  old.outerHTML = renderDownloadCard();
-  bindDownloadUI();
-}
-
-function scheduleDownloadPoll() {
-  clearTimeout(state.downloadTimer);
-  const active = state.download?.state === "downloading" || state.download?.state === "verifying";
-  if (!active || state.view !== "providers") return;
-  state.downloadTimer = setTimeout(async () => {
-    await refreshDownloadStatus();
-    scheduleDownloadPoll();
-  }, 1200);
-}
-
-async function refreshDownloadStatus() {
-  try {
-    state.download = await api("/api/downloads/workbuddy/status");
-    updateDownloadCard();
-  } catch {}
+    <button class="template preset-card" data-preset="${key}">
+      <span class="t-icon">${esc(initialOf(preset.name))}</span>
+      <span style="min-width:0"><strong>${esc(preset.name)}</strong><span>${esc(preset.note)}</span></span>
+      <span class="tag ${provider ? "green" : ""}" style="margin-left:auto">${badge}</span>
+    </button>`;
 }
 
 function renderProviders() {
   const cards = state.providers
     .map((provider) => {
-      const isWB = provider.kind === "workbuddy";
-      const status = provider.status;
       const ready = providerReady(provider);
-      const dot = ready ? "on" : status && status.available ? "err" : "";
-      const expiry = status?.account?.expiresAtMs ? new Date(status.account.expiresAtMs) : null;
-      const expiryText = expiry
-        ? `${expiry.getMonth() + 1}/${expiry.getDate()} ${String(expiry.getHours()).padStart(2, "0")}:${String(expiry.getMinutes()).padStart(2, "0")}`
-        : "";
-      const sub = isWB
-        ? `${provider.region === "global" ? "国际" : "国内"} · ${providerStatusText(provider)}${expiryText ? ` · Token 至 ${expiryText}` : ""} · ${(provider.models || []).length} 个模型`
-        : `${provider.baseUrl || "未填写地址"} · ${(provider.models || []).length} 个模型`;
+      const dot = ready ? "on" : provider.enabled === false ? "" : "err";
+      const sub = `${provider.baseUrl || "未填写地址"} · ${(provider.models || []).length} 个模型 · ${providerStatusText(provider)}`;
       return `
         <div class="card provider-card" data-provider-card="${provider.id}">
-          <div class="p-icon" style="${isWB ? "background:#e8f7ef;color:#0d8051" : ""}"><svg><use href="${isWB ? "#i-server" : "#i-plug"}"/></svg></div>
+          <div class="p-icon"><svg><use href="#i-plug"/></svg></div>
           <div class="p-main">
-            <div class="p-name"><i class="status-dot ${dot}"></i>${esc(provider.name)} ${isWB ? `<span class="tag green">${provider.region === "global" ? "国际" : "国内"}</span>` : ""} ${provider.hasKey ? `<span class="tag">Key 已存</span>` : ""}</div>
+            <div class="p-name"><i class="status-dot ${dot}"></i>${esc(provider.name)} ${provider.hasKey ? `<span class="tag">Key 已存</span>` : ""} ${provider.preset === "ollama" || provider.requiresKey === false ? `<span class="tag green">免 Key</span>` : ""}</div>
             <div class="p-sub">${esc(sub)}</div>
           </div>
           <div class="p-actions">
-            ${isWB ? `<button class="btn small" data-wb-accounts="${provider.id}">账号</button>` : ""}
             <button class="btn small" data-refresh-models="${provider.id}">刷新模型</button>
             <button class="btn small" data-test-provider="${provider.id}">测试</button>
-            ${isWB ? "" : `<button class="btn small" data-edit-provider="${provider.id}">编辑</button>`}
+            <button class="btn small" data-edit-provider="${provider.id}">编辑</button>
             <button class="icon-btn" data-provider-menu="${provider.id}" title="更多"><svg><use href="#i-more"/></svg></button>
           </div>
         </div>
         <div class="test-result ${state.testResults?.[provider.id]?.ok ? "ok" : state.testResults?.[provider.id] ? "bad" : ""}" id="test-${provider.id}" style="${state.testResults?.[provider.id] ? "" : "display:none"}">${esc(state.testResults?.[provider.id]?.text || "")}</div>`;
     })
     .join("");
-  const demo = Boolean(state.boot?.demo);
+  const presetGroups = PRESET_GROUPS.map((group) => {
+    const rows = Object.entries(PRESETS)
+      .filter(([, preset]) => preset.group === group)
+      .map(([key, preset]) => presetCardHTML(key, preset))
+      .join("");
+    return `<div class="form-section-title">${esc(group)}</div><div class="template-list">${rows}</div>`;
+  }).join("");
   $("#main").innerHTML = `
     <div class="page">
       <div class="page-head">
-        <div><h1>API 接口</h1><p>接任意 OpenAI 兼容服务；本机模型也可以。</p></div>
+        <div><h1>API 接口</h1><p>选一个服务商，填入自己的 API Key。Base URL 和常用模型已经配好。</p></div>
         <div class="page-actions">
-          <button class="btn" data-wb-detect><svg><use href="#i-refresh"/></svg>刷新状态</button>
           <button class="btn primary" data-add-provider><svg><use href="#i-plus"/></svg>添加接口</button>
         </div>
       </div>
-      ${demo ? "" : renderDownloadCard()}
-      ${cards || `<div class="empty-list" style="margin-top:9px">还没有接口</div>`}
-      ${demo ? "" : `<div class="notice" style="margin-top:14px">
-        WorkBuddy 通过本机已安装的 <b>dsh-connect-workbuddy</b> 读取登录态，不复制、不上传你的账号凭据。
-        免费 API 的额度与模型会变化，以各平台控制台为准；OwnChat 不内置任何 Key。
-      </div>`}
+      ${cards || `<div class="empty-list" style="margin-top:9px">还没有配置接口。从下面选一个服务商开始。</div>`}
+      <div class="form-section-title" style="margin-top:20px">服务商预设</div>
+      ${presetGroups}
+      <div class="notice" style="margin-top:14px">
+        OwnChat 只连接你自己配置的 OpenAI 兼容接口，不内置、不转售、不共享任何账号或额度。
+        各服务商的账号、计费、数据与地区规则以对方协议为准。
+      </div>
     </div>`;
   $("[data-add-provider]").onclick = openAddProvider;
-  $("[data-wb-detect]").onclick = detectWorkBuddy;
-  if (!demo) {
-    bindDownloadUI();
-    refreshDownloadStatus().then(scheduleDownloadPoll);
-  }
-  $$("[data-wb-accounts]").forEach((button) => {
-    button.onclick = () => openWorkBuddyAccounts(providerOf(button.dataset.wbAccounts));
+  $$("[data-preset]").forEach((button) => {
+    button.onclick = () => openProviderForm(null, button.dataset.preset);
   });
   $$("[data-refresh-models]").forEach((button) => {
     button.onclick = () => refreshProviderModels(button.dataset.refreshModels);
@@ -1725,84 +1805,121 @@ function renderProviders() {
 }
 
 function openAddProvider() {
-  const rows = Object.entries(PRESETS)
-    .map(([key, preset]) => `
-      <button class="template" data-template="${key}">
-        <span class="t-icon">${esc(initialOf(preset.name))}</span>
-        <span><strong>${esc(preset.name)}</strong><span>${esc(preset.note)}</span></span>
-      </button>`)
-    .join("");
+  const groups = PRESET_GROUPS.map((group) => {
+    const rows = Object.entries(PRESETS)
+      .filter(([, preset]) => preset.group === group)
+      .map(([key, preset]) => presetCardHTML(key, preset))
+      .join("");
+    return `<div class="form-section-title">${esc(group)}</div><div class="template-list">${rows}</div>`;
+  }).join("");
   openModal({
     title: "添加接口",
-    sub: "选择预设，或从空白开始",
-    body: `<div class="template-list">${rows}</div>
-      <div class="notice" style="margin-top:14px">免费平台都需要在各自控制台注册并获取 Key；OwnChat 只负责调用，不代注册。</div>`,
+    sub: "选择服务商，Base URL 会自动填好",
+    wide: true,
+    body: `${groups}
+      <div class="notice" style="margin-top:14px">你只需要准备对应平台的 API Key。没有 Key 的平台会给出申请入口。</div>`,
     onMount: (root) => {
-      $$("[data-template]", root).forEach((button) => {
-        button.onclick = () => openProviderForm(null, button.dataset.template);
+      $$("[data-preset]", root).forEach((button) => {
+        button.onclick = () => openProviderForm(null, button.dataset.preset);
       });
     },
   });
 }
 
 function openProviderForm(provider, presetKey) {
-  const preset = presetKey ? PRESETS[presetKey] : null;
+  const key = presetKey || provider?.preset || "";
+  const preset = PRESETS[key] || null;
+  const knownModels = provider?.models?.length ? provider.models : presetModels(preset);
   const p = provider || {
     name: preset?.name || "",
     baseUrl: preset?.baseUrl || "",
-    model: preset?.model || "",
-    protocol: "openai",
-    // Presets that ship a default model are usable right after saving; the
-    // others (e.g. Ark) need an explicit endpoint id first.
-    models: preset?.model ? [{ id: preset.model, name: preset.model }] : [],
+    model: preset?.model || knownModels[0]?.id || "",
+    protocol: preset?.protocol || "openai",
+    models: knownModels,
     supportsVision: false,
     supportsStreaming: true,
     temperature: 0.7,
     maxTokens: 4096,
     enabled: true,
-    kind: "openai",
+    requiresKey: preset?.requiresKey !== false,
+    preset: key || undefined,
   };
   const isNew = !provider;
+  const needsKey = preset ? preset.requiresKey !== false : true;
+  const showKey = needsKey || key === "custom" || !preset;
   const modelsText = (p.models || []).map((m) => m.id).join("\n");
+  const modelIds = new Set(knownModels.map((m) => m.id));
+  if (p.model && !modelIds.has(p.model)) knownModels.unshift({ id: p.model, name: p.model });
+  const modelOptions = knownModels
+    .map((model) => `<option value="${esc(model.id)}" ${model.id === p.model ? "selected" : ""}>${esc(model.name || model.id)}</option>`)
+    .join("");
+  const modelField = knownModels.length
+    ? `<select id="pf-model">${modelOptions}</select><div class="hint">保存后会自动拉取该账号当前可用的模型。</div>`
+    : `<input id="pf-model" value="${esc(p.model || "")}" placeholder="例如 ep-2026..."><div class="hint">这个平台不会返回通用模型列表，需要填控制台里的模型或接入点 ID。</div>`;
+  const baseFixed = Boolean(preset?.baseUrl) && !["custom", "azure"].includes(key);
+  const guide = preset?.steps?.length
+    ? `<div class="setup-guide">
+        <div class="setup-guide-head"><strong>${esc(preset.name)}</strong><span>${esc(preset.note)}</span></div>
+        <ol class="setup-steps">${preset.steps.map((step) => `<li>${esc(step)}</li>`).join("")}</ol>
+        <div class="setup-links">
+          ${preset.keyUrl ? `<a class="btn small" href="${esc(preset.keyUrl)}" target="_blank" rel="noopener noreferrer">打开控制台</a>` : ""}
+          ${preset.docsUrl ? `<a class="btn small ghost" href="${esc(preset.docsUrl)}" target="_blank" rel="noopener noreferrer">查看接口文档</a>` : ""}
+        </div>
+      </div>`
+    : "";
+  const keyField = showKey
+    ? `<div class="field full"><label>API Key ${needsKey ? "" : "（可选）"}</label>
+        <div class="row"><input id="pf-apiKey" type="password" placeholder="${p.hasKey ? "已保存，留空则不修改" : needsKey ? "粘贴你的 API Key" : "没有 Key 可以留空"}" autocomplete="off">
+        ${preset?.keyUrl ? `<a class="btn small" href="${esc(preset.keyUrl)}" target="_blank" rel="noopener noreferrer">去申请</a>` : ""}</div>
+        <div class="hint">Key 只保存在本机，用 AES-256-GCM 加密；不会上传到 OwnChat 的服务器。</div>
+      </div>`
+    : `<div class="notice green">这个接口在本机运行，不需要 API Key。</div>`;
   openModal({
-    title: isNew ? "添加接口" : "编辑接口",
-    sub: isNew ? "填写 API 信息；保存后可以测试连接" : p.name,
+    title: isNew ? `接入 ${preset?.name || "自定义接口"}` : `编辑 ${p.name}`,
+    sub: isNew ? "Base URL 已经预置，通常只需要填 Key" : p.baseUrl,
     wide: true,
     body: `
-      <div class="form-grid">
-        <div class="field"><label>显示名称</label><input id="pf-name" value="${esc(p.name)}" placeholder="例如 OpenRouter"></div>
-        <div class="field"><label>协议</label><select id="pf-protocol">
-          <option value="openai" ${p.protocol !== "azure" ? "selected" : ""}>OpenAI Chat Completions</option>
-          <option value="azure" ${p.protocol === "azure" ? "selected" : ""}>Azure OpenAI</option>
-        </select></div>
-        <div class="field full"><label>Base URL</label><input id="pf-baseUrl" value="${esc(p.baseUrl || "")}" placeholder="https://.../v1"></div>
-        <div class="field"><label>API Key</label><input id="pf-apiKey" type="password" placeholder="${p.hasKey ? "已保存，留空则不修改" : "sk-..."}" autocomplete="off"></div>
-        <div class="field"><label>默认模型 ID</label><input id="pf-model" value="${esc(p.model || "")}" placeholder="例如 gpt-4o-mini"></div>
-        <div class="field"><label>组织 ID（可选）</label><input id="pf-org" value="${esc(p.organization || "")}" placeholder="org-..."></div>
-        <div class="field"><label>上下文窗口</label><input id="pf-context" type="number" value="${esc(p.contextWindow || 128000)}"></div>
-        <div class="field"><label>最大输出</label><input id="pf-max" type="number" value="${esc(p.maxTokens || 4096)}"></div>
-        <div class="field"><label>温度</label><input id="pf-temp" type="number" step="0.1" min="0" max="2" value="${esc(p.temperature ?? 0.7)}"></div>
-        <div class="field"><label>Top P</label><input id="pf-topp" type="number" step="0.1" min="0" max="1" value="${esc(p.topP ?? 1)}"></div>
-        <div class="field full"><label>模型列表（每行一个 ID）</label><textarea id="pf-models" class="prompt-box" placeholder="留空则从 /models 自动拉取">${esc(modelsText)}</textarea>
-          <div class="hint">也可以点下方“拉取模型”，自动填入。</div></div>
-        <div class="field full"><label>自定义请求头（JSON，可选）</label><input id="pf-headers" value="${esc(p.headers ? JSON.stringify(p.headers) : "")}" placeholder='{"X-Custom":"value"}'></div>
-        <div class="field full"><label>自定义请求体（JSON，可选）</label><input id="pf-extra" value="${esc(p.extraBody ? JSON.stringify(p.extraBody) : "")}" placeholder='{"provider":"..."}'></div>
-        <div class="field"><label>API 版本（Azure）</label><input id="pf-apiVersion" value="${esc(p.apiVersion || "")}" placeholder="2024-10-21"></div>
-        <div class="field"><label>部署名（Azure）</label><input id="pf-deployment" value="${esc(p.deployment || "")}" placeholder="gpt-4o"></div>
-        <div class="field"><label>超时（毫秒）</label><input id="pf-timeout" type="number" value="${esc(p.timeoutMs || 90000)}"></div>
-        <div class="field"><label>&nbsp;</label><label class="check"><input type="checkbox" id="pf-vision" ${p.supportsVision ? "checked" : ""}> 支持图片输入</label></div>
-        <div class="field full"><label class="check"><input type="checkbox" id="pf-enabled" ${p.enabled !== false ? "checked" : ""}> 启用这个接口</label></div>
+      ${guide}
+      <div class="form-grid" style="margin-top:${guide ? "14px" : "0"}">
+        ${baseFixed
+          ? `<div class="field full"><label>Base URL</label><input id="pf-baseUrl" value="${esc(p.baseUrl)}" readonly></div>`
+          : `<div class="field full"><label>Base URL</label><input id="pf-baseUrl" value="${esc(p.baseUrl || "")}" placeholder="https://.../v1"></div>`}
+        ${keyField}
+        <div class="field full"><label>默认模型</label>${modelField}</div>
       </div>
+      <details class="provider-advanced" ${!preset || ["custom", "azure"].includes(key) ? "open" : ""}>
+        <summary>高级设置</summary>
+        <div class="form-grid" style="margin-top:12px">
+          <div class="field"><label>显示名称</label><input id="pf-name" value="${esc(p.name)}" placeholder="例如 OpenRouter"></div>
+          <div class="field"><label>协议</label><select id="pf-protocol">
+            <option value="openai" ${p.protocol !== "azure" ? "selected" : ""}>OpenAI Chat Completions</option>
+            <option value="azure" ${p.protocol === "azure" ? "selected" : ""}>Azure OpenAI</option>
+          </select></div>
+          <div class="field"><label>组织 ID（可选）</label><input id="pf-org" value="${esc(p.organization || "")}" placeholder="org-..."></div>
+          <div class="field"><label>上下文窗口</label><input id="pf-context" type="number" value="${esc(p.contextWindow || 128000)}"></div>
+          <div class="field"><label>最大输出</label><input id="pf-max" type="number" value="${esc(p.maxTokens || 4096)}"></div>
+          <div class="field"><label>温度</label><input id="pf-temp" type="number" step="0.1" min="0" max="2" value="${esc(p.temperature ?? 0.7)}"></div>
+          <div class="field"><label>Top P</label><input id="pf-topp" type="number" step="0.1" min="0" max="1" value="${esc(p.topP ?? 1)}"></div>
+          <div class="field"><label>超时（毫秒）</label><input id="pf-timeout" type="number" value="${esc(p.timeoutMs || 90000)}"></div>
+          <div class="field full"><label>模型列表（每行一个 ID）</label><textarea id="pf-models" class="prompt-box" placeholder="留空则从 /models 自动拉取">${esc(modelsText)}</textarea></div>
+          <div class="field full"><label>自定义请求头（JSON，可选）</label><input id="pf-headers" value="${esc(p.headers ? JSON.stringify(p.headers) : "")}" placeholder='{"X-Custom":"value"}'></div>
+          <div class="field full"><label>自定义请求体（JSON，可选）</label><input id="pf-extra" value="${esc(p.extraBody ? JSON.stringify(p.extraBody) : "")}" placeholder='{"provider":"..."}'></div>
+          <div class="field"><label>API 版本（Azure）</label><input id="pf-apiVersion" value="${esc(p.apiVersion || "")}" placeholder="2024-10-21"></div>
+          <div class="field"><label>部署名（Azure）</label><input id="pf-deployment" value="${esc(p.deployment || "")}" placeholder="gpt-4o"></div>
+          <div class="field"><label>&nbsp;</label><label class="check"><input type="checkbox" id="pf-vision" ${p.supportsVision ? "checked" : ""}> 默认支持图片输入</label></div>
+          <div class="field"><label>&nbsp;</label><label class="check"><input type="checkbox" id="pf-enabled" ${p.enabled !== false ? "checked" : ""}> 启用这个接口</label></div>
+        </div>
+      </details>
       <div class="test-result" id="pf-test" style="display:none"></div>`,
     foot: `
       ${isNew ? "" : `<button class="btn danger" data-pf-delete>删除</button>`}
       <div class="spacer"></div>
       <button class="btn" data-pf-cancel>取消</button>
       <button class="btn" data-pf-fetch>拉取模型</button>
-      <button class="btn primary" data-pf-save>保存</button>`,
+      <button class="btn primary" data-pf-save>${isNew ? "保存并连接" : "保存"}</button>`,
     onMount: (root) => {
       $("[data-pf-cancel]", root).onclick = closeModal;
-      $("[data-pf-save]", root).onclick = () => saveProviderForm(root, provider, presetKey);
+      $("[data-pf-save]", root).onclick = () => saveProviderForm(root, provider, key);
       $("[data-pf-fetch]", root).onclick = () => fetchModelsInForm(root, provider);
       const del = $("[data-pf-delete]", root);
       if (del) del.onclick = () => deleteProviderConfirm(provider);
@@ -1817,6 +1934,10 @@ function collectProviderForm(root) {
     .map((line) => line.trim())
     .filter(Boolean)
     .map((id) => ({ id, name: id }));
+  if (models.length === 0) {
+    const selected = value("pf-model");
+    if (selected) models.push({ id: selected, name: selected });
+  }
   let headers;
   let extraBody;
   try {
@@ -1846,25 +1967,50 @@ function collectProviderForm(root) {
     apiVersion: value("pf-apiVersion"),
     deployment: value("pf-deployment"),
     timeoutMs: Number(value("pf-timeout")) || 90000,
-    supportsVision: $("#pf-vision", root).checked,
-    enabled: $("#pf-enabled", root).checked,
+    supportsVision: $("#pf-vision", root)?.checked || false,
+    enabled: $("#pf-enabled", root)?.checked !== false,
   };
 }
 
 async function saveProviderForm(root, existing, presetKey = "") {
   try {
     const input = collectProviderForm(root);
+    const key = existing?.preset || presetKey;
+    const preset = PRESETS[key] || null;
+    if (preset) {
+      input.preset = key;
+      input.requiresKey = preset.requiresKey !== false;
+      if (!input.name) input.name = preset.name;
+      if (!input.baseUrl) input.baseUrl = preset.baseUrl;
+      if (preset.protocol) input.protocol = preset.protocol;
+    }
     if (!input.name) throw new Error("请填写名称");
     if (!input.baseUrl) throw new Error("请填写 Base URL");
+    if (preset?.requiresKey !== false && !input.apiKey && !existing?.hasKey) {
+      throw new Error("请填写 API Key");
+    }
     if (existing?.id) input.id = existing.id;
-    const preset = existing?.preset || presetKey;
-    if (preset) input.preset = preset;
     const data = await api("/api/providers", { method: "POST", body: JSON.stringify(input) });
-    if (existing) Object.assign(existing, data.provider);
-    else state.providers.push(data.provider);
+    let saved = data.provider;
+    if (existing) Object.assign(existing, saved);
+    else state.providers.push(saved);
     closeModal();
     renderProviders();
-    toast("接口已保存", "ok");
+    toast(existing ? "接口已保存" : `已接入 ${saved.name}`, "ok");
+    if (key && !["azure", "custom"].includes(key)) {
+      api(`/api/providers/${saved.id}/models`, { method: "POST" })
+        .then((result) => {
+          saved.models = result.models || [];
+          if (!saved.model && saved.models[0]) saved.model = saved.models[0].id;
+          if (existing) Object.assign(existing, saved);
+          if (state.view === "providers") renderProviders();
+          toast(`已读取 ${saved.models.length} 个模型`, "ok");
+        })
+        .catch((error) => {
+          if (state.view === "providers") renderProviders();
+          toast(`模型列表没能自动拉取：${error.message}`, "err");
+        });
+    }
   } catch (error) {
     toast(error.message, "err");
   }
@@ -1922,9 +2068,7 @@ async function refreshProviderModels(id) {
   const provider = providerOf(id);
   try {
     toast("正在刷新模型…");
-    const result = provider.kind === "workbuddy"
-      ? await api("/api/workbuddy/models", { method: "POST", body: JSON.stringify({ region: provider.region, refresh: true }) })
-      : await api(`/api/providers/${id}/models`, { method: "POST" });
+    const result = await api(`/api/providers/${id}/models`, { method: "POST" });
     provider.models = result.models || provider.models;
     provider.modelsFetchedAt = Date.now();
     renderProviders();
@@ -1970,20 +2114,15 @@ function openProviderMenu(provider) {
     title: provider.name,
     narrow: true,
     body: `<div class="row" style="flex-wrap:wrap">
-      ${provider.kind === "workbuddy" ? "" : `<button class="btn" data-edit>编辑</button>`}
-      ${provider.kind === "workbuddy" ? `<button class="btn" data-accounts>账号</button>` : ""}
+      <button class="btn" data-edit>编辑</button>
       <button class="btn" data-refresh>刷新模型</button>
       <button class="btn" data-test>测试</button>
-      ${provider.kind === "workbuddy" ? "" : `<button class="btn danger" data-delete>删除</button>`}
+      <button class="btn danger" data-delete>删除</button>
     </div>`,
     onMount: (root) => {
       $("[data-edit]", root)?.addEventListener("click", () => {
         closeModal();
         openProviderForm(provider);
-      });
-      $("[data-accounts]", root)?.addEventListener("click", () => {
-        closeModal();
-        openWorkBuddyAccounts(provider);
       });
       $("[data-refresh]", root).onclick = () => {
         closeModal();
@@ -2001,54 +2140,21 @@ function openProviderMenu(provider) {
   });
 }
 
-function openWorkBuddyAccounts(provider) {
-  if (!provider) return;
-  const status = provider.status;
-  const accounts = status?.accounts || [];
-  openModal({
-    title: `${provider.name} · 账号`,
-    sub: status?.available ? (status.signedIn ? "已读取本机 WorkBuddy 登录态" : "未检测到登录态") : "插件未就绪",
-    body: status?.available
-      ? `<div class="field"><label>选择账号</label><select id="wbAccount">
-          ${accounts.map((account) => `<option value="${esc(account.id)}" ${account.selected ? "selected" : ""}>${esc(account.accountName || account.id)} · ${esc(account.domain || "")}</option>`).join("")}
-        </select><div class="hint">账号来自 dsh-connect-workbuddy 的本地凭据库；OwnChat 不会复制 Token。</div></div>
-        ${status.error ? `<div class="notice red" style="margin-top:10px">${esc(status.error)}</div>` : ""}
-        <div class="notice" style="margin-top:10px">如果账号列表为空，请先在 WorkBuddy 桌面端登录，或在 DSH 的 WorkBuddy 插件卡片里扫码添加账号。</div>`
-      : `<div class="notice red">${esc(status?.error || "未找到 dsh-connect-workbuddy")}</div>`,
-    foot: `<div class="spacer"></div><button class="btn" data-close>关闭</button>${accounts.length ? `<button class="btn primary" data-save-account>使用此账号</button>` : ""}`,
-    onMount: (root) => {
-      $("[data-close]", root).onclick = closeModal;
-      $("[data-save-account]", root)?.addEventListener("click", async () => {
-        try {
-          const accountId = $("#wbAccount", root).value;
-          await api("/api/workbuddy/account", { method: "POST", body: JSON.stringify({ region: provider.region, accountId }) });
-          const boot = await api("/api/bootstrap");
-          state.providers = boot.providers;
-          state.workbuddy = boot.workbuddy;
-          closeModal();
-          renderAll();
-          toast("账号已切换", "ok");
-        } catch (error) {
-          toast(error.message, "err");
-        }
-      });
-    },
-  });
-}
-
 /* ---------- personas ---------- */
 function renderPersonas() {
   const cards = state.personas
     .filter((persona) => !persona.hidden)
     .map((persona) => {
-      const provider = providerOf(persona.providerId);
+      const provider = providerForPersona(persona);
+      const model = modelForPersona(persona, provider);
+      const meta = model ? `${provider?.name || "接口"} · ${model.name}` : "未绑定模型";
       return `
         <div class="persona-card">
           ${persona.builtin ? `<span class="builtin-badge">预置</span>` : ""}
           ${avatarHTML(persona.avatar, persona.name, "avatar")}
           <h3>${esc(persona.name)}</h3>
           <p>${esc(persona.systemPrompt || "未填写人格设定")}</p>
-          <div class="p-meta">${esc(modelName(provider, persona.modelId))}</div>
+          <div class="p-meta">${esc(meta)}</div>
           <div class="p-actions">
             <button class="btn small" data-edit-persona="${persona.id}">编辑</button>
             <button class="btn small" data-avatar-persona="${persona.id}">头像</button>
@@ -2086,11 +2192,15 @@ function openPersonaForm(persona) {
     systemPrompt: "你是一个乐于助人的 AI 助手。请用中文回答，先给结论，再给必要步骤。",
     providerId: state.providers[0]?.id || "",
     modelId: state.providers[0]?.models?.[0]?.id || "",
+    preferredPreset: "",
   };
   const providerOptions = state.providers
     .map((provider) => `<option value="${provider.id}" ${provider.id === p.providerId ? "selected" : ""}>${esc(provider.name)}</option>`)
     .join("");
-  const selectedProvider = providerOf(p.providerId) || state.providers[0];
+  const presetOptions = Object.entries(PRESETS)
+    .map(([key, preset]) => `<option value="${key}" ${key === p.preferredPreset ? "selected" : ""}>${esc(preset.name)}</option>`)
+    .join("");
+  const selectedProvider = providerOf(p.providerId) || providerForPersona(p) || state.providers[0];
   const modelOptions = (selectedProvider?.models || [])
     .map((model) => `<option value="${esc(model.id)}" ${model.id === p.modelId ? "selected" : ""}>${esc(model.name)}</option>`)
     .join("");
@@ -2109,7 +2219,9 @@ function openPersonaForm(persona) {
         </div>
         <div class="avatar-controls">
           <div class="field"><label>名字</label><input id="pers-name" value="${esc(p.name)}" placeholder="例如 DeepSeek娘"></div>
-          <div class="field"><label>接口</label><select id="pers-provider">${providerOptions}</select></div>
+          <div class="field"><label>接口</label><select id="pers-provider"><option value="">不绑定，按预设自动匹配</option>${providerOptions}</select></div>
+          <div class="field"><label>预设匹配</label><select id="pers-preset"><option value="">不指定</option>${presetOptions}</select>
+            <div class="hint">没有绑定接口时，优先用这里选的服务商。</div></div>
           <div class="field"><label>默认模型</label><select id="pers-model">${modelOptions}</select></div>
           <div class="field"><label>系统提示词</label><textarea id="pers-prompt" class="prompt-box" style="min-height:130px">${esc(p.systemPrompt || "")}</textarea></div>
           <div class="field"><label>强调色</label><input id="pers-accent" type="color" value="${esc(p.accent || "#15AC70")}" style="height:32px;padding:2px"></div>
@@ -2124,6 +2236,14 @@ function openPersonaForm(persona) {
         $("#pers-model", root).innerHTML = (provider?.models || [])
           .map((model) => `<option value="${esc(model.id)}">${esc(model.name)}</option>`)
           .join("");
+      };
+      $("#pers-preset", root).onchange = () => {
+        const key = $("#pers-preset", root).value;
+        const provider = state.providers.find((item) => item.preset === key);
+        if (provider && !providerSelect.value) {
+          providerSelect.value = provider.id;
+          providerSelect.onchange();
+        }
       };
       $("[data-persona-avatar]", root).onclick = () => openAvatarStudio(p, (url) => {
         p.avatar = url;
@@ -2154,6 +2274,7 @@ function openPersonaForm(persona) {
             name: $("#pers-name", root).value.trim(),
             providerId: $("#pers-provider", root).value,
             modelId: $("#pers-model", root).value,
+            preferredPreset: $("#pers-preset", root).value,
             systemPrompt: $("#pers-prompt", root).value,
             accent: $("#pers-accent", root).value,
             avatar: p.avatar,

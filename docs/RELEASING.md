@@ -8,12 +8,15 @@ OwnChat follows `MAJOR.MINOR.PATCH`.
 |---|---|---|---|
 | `0.1.0` | `v0.1.0` | Yes | Yes |
 | `0.2.0` | `v0.2.0` | Yes | Yes |
-| `0.2.1` | `v0.2.1` | No (tag only) | No |
+| `0.2.1` | `v0.2.1` | Yes | Yes (documented patch exception) |
+| `0.2.2` | `v0.2.2` | No (tag only) | No |
+| `0.2.3` | `v0.2.3` | Yes | Yes (documented patch exception) |
 | `1.0.0` | `v1.0.0` | Yes | Yes |
 
-Only `MAJOR.MINOR.0` gets an installer. Patch releases are git tags only, so
-the GitHub Releases sidebar always points at a minor release that has a
-downloadable installer.
+Minor releases get an installer by default. A patch release may ship one when it
+contains a migration or a security fix that has to reach existing installs; the
+release notes must say so and the build must use `-AllowPatchInstaller`. Patches
+without that exception stay tag-only.
 
 Old releases are immutable:
 
@@ -83,17 +86,23 @@ the Releases page.
 
 ### 5. Patch release
 
-For `0.2.1`:
+By default, a patch is a tag and a `CHANGELOG.md` entry only.
 
 ```powershell
-git tag -a v0.2.1 -m "OwnChat 0.2.1"
-git push origin v0.2.1
+git tag -a v0.2.4 -m "OwnChat 0.2.4"
+git push origin v0.2.4
 ```
 
-Do **not** create a GitHub Release and do **not** upload an installer. Add the
-patch entry to `CHANGELOG.md` on `main`. If the patch is a security fix that
-must be announced, publish a GitHub Security Advisory instead of a release
-with assets.
+If the patch carries a migration or a security fix that existing installs must
+receive, it may ship an installer. Build with the explicit switch:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\installer\build-release.ps1 `
+  -Version 0.2.3 -AllowPatchInstaller
+```
+
+Then create a normal GitHub Release, and state in the notes why the patch has
+assets. `0.2.1` and `0.2.3` are documented exceptions.
 
 ## Installer notes
 

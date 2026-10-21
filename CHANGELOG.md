@@ -5,8 +5,55 @@ All notable changes to OwnChat are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
-Only `MAJOR.MINOR.0` releases (0.1.0, 0.2.0, …, 1.0.0) receive installer
-assets on GitHub Releases. Patch releases are source-only.
+> Entries below 0.2.3 are historical. They describe releases that may contain
+> features or integrations that have since been removed. Current behavior is
+> defined by the README and the 0.2.3 notes.
+
+Only `MAJOR.MINOR.0` releases normally receive installer assets on GitHub
+Releases. A patch may ship one when it carries a migration or security fix that
+has to reach existing installs; the release notes must say so.
+
+## [0.2.3] — 2026-10-22
+
+This release removes the old local third-party credential bridge and makes
+provider setup self-service. It is a patch release with an installer because
+existing installs need the migration.
+
+### Changed
+
+- **Provider setup is now preset-driven.** Pick a provider and the base URL,
+  protocol and common models are filled in. The user only needs to paste their
+  own API key.
+- **Every preset has a short setup guide** with a console link, a docs link and
+  3–4 concrete steps. The guide is inside the form, not buried in the README.
+- **The API page lists all presets by group**: domestic direct, overseas direct,
+  and local/self-hosted. Configured providers stay above the presets.
+- **Saving a preset fetches its model list automatically.** If the provider
+  cannot list models, the form says so and keeps the saved provider.
+
+### Removed
+
+- The old local credential bridge and its provider slots. OwnChat no longer
+  reads another application's login state, and no longer bundles a downloader
+  or installer runner for a third-party desktop client.
+- The two region-specific provider cards and all related account/region UI.
+- The old download center and its SHA-256/signature display.
+
+### Fixed
+
+- Upgrades clean up providers, personas and conversations left pointing at the
+  removed bridge. A stale binding no longer produces a dead provider card or a
+  chat request that cannot resolve its model.
+- The local API now requires a per-launch token, checks local `Origin`/`Host`,
+  and rejects non-JSON state-changing requests.
+- Provider forms no longer require a manual Base URL for built-in presets.
+
+### Notes
+
+- Existing `data/` is preserved. Conversations that used the removed provider
+  keep their messages, but need a new model selected before sending again.
+- The installer is still unsigned; verify `SHA256SUMS.txt`.
+- `0.2.3` is the last release that carries migration code for the old bridge.
 
 ## [0.2.2] — 2026-10-22
 

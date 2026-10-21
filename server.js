@@ -8,8 +8,6 @@ import {
   Store, DATA_DIR, PUBLIC_DIR, UPLOAD_DIR, AVATAR_DIR, uid, now,
   decryptSecret, encryptSecret, mergeModels,
 } from "./lib/store.js";
-import { WorkBuddyBridge, WorkBuddyError } from "./lib/workbuddy.js";
-import { WorkBuddyDownloader } from "./lib/downloads.js";
 import { chatOpenAI, fetchModels, testProvider, ProviderError } from "./lib/openai.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -19,8 +17,7 @@ const APP_VERSION = JSON.parse(
   readFileSync(new URL("./package.json", import.meta.url), "utf8").replace(/^\uFEFF/, ""),
 ).version;
 const STORE = new Store();
-const WORKBUDDY = new WorkBuddyBridge();
-const DOWNLOADER = new WorkBuddyDownloader();
+const SESSION_TOKEN = crypto.randomBytes(24).toString("base64url");
 const SETTINGS = {
   host: "127.0.0.1",
   basePort: Number(process.env.OWNCHAT_PORT) || 17321,
@@ -30,8 +27,8 @@ const SETTINGS = {
   open: process.argv.includes("--open"),
   managed: process.argv.includes("--open") || process.argv.includes("--managed"),
 };
-// Demo mode: skip the third-party integration entirely so screenshots and tests
-// never pick up a developer's real signed-in account.
+// Demo mode: do not read or write a real user's provider data when the UI is
+// being used for screenshots or tests.
 const DEMO = process.env.OWNCHAT_DEMO === "1";
 const MIME = {
   ".html": "text/html; charset=utf-8",
@@ -99,6 +96,40 @@ function releaseInstanceLock() {
 
 function log(...args) {
   console.log(new Date().toISOString(), ...args);
+}
+
+const LOCAL_HOSTS = new Set(["127.0.0.1", "localhost", "[::1]", "::1"]);
+
+function hostnameOf(value) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  try {
+    return new URL(text.includes("://") ? text : `http://${text}`).hostname.toLowerCase();
+  } catch {
+    return "";
+  }
+}
+
+function isLocalRequest(req) {
+  if (!LOCAL_HOSTS.has(hostnameOf(req.headers.host))) return false;
+  const origin = req.headers.origin;
+  if (origin && !LOCAL_HOSTS.has(hostnameOf(origin))) return false;
+  const referer = req.headers.referer;
+  if (referer && !LOCAL_HOSTS.has(hostnameOf(referer))) return false;
+  return true;
+}
+
+function hasSession(req, url) {
+  if (url.pathname === "/api/health") return true;
+  const header = req.headers["x-ownchat-token"];
+  const query = url.searchParams.get("token");
+  return header === SESSION_TOKEN || query === SESSION_TOKEN;
+}
+
+function hasJsonBody(req) {
+  const length = Number(req.headers["content-length"] || 0);
+  if (length > 0) return true;
+  return Boolean(req.headers["transfer-encoding"]);
 }
 
 function sendJson(res, status, value) {
@@ -336,52 +367,18 @@ async function saveProviderModels(providerId, models) {
 }
 
 function providerSupportsVision(provider, modelId) {
-  if (provider.kind === "workbuddy") {
-    const info = modelInfo(provider, modelId);
-    if (info) return Boolean(info.vision);
-    return Boolean(provider.supportsVision);
-  }
   const info = modelInfo(provider, modelId);
   return Boolean(info?.vision || provider.supportsVision);
 }
 
-const DEMO_STATUS = {
-  available: false,
-  signedIn: false,
-  accounts: [],
-  error: "演示模式：未加载本地账号",
-  models: [],
-};
-
-async function enrichProviders() {
-  const statuses = DEMO
-    ? { cn: { ...DEMO_STATUS, region: "cn" }, global: { ...DEMO_STATUS, region: "global" } }
-    : { cn: await WORKBUDDY.status("cn"), global: await WORKBUDDY.status("global") };
-  const providers = STORE.providers().map((provider) => {
-    if (provider.kind === "workbuddy") {
-      const status = statuses[provider.region] || null;
-      return {
-        ...provider,
-        status,
-        models: provider.models?.length ? provider.models : status?.models || [],
-      };
-    }
-    return provider;
-  });
-  return { providers, statuses };
-}
-
 async function bootstrap() {
-  const { providers, statuses } = await enrichProviders();
   return {
     version: APP_VERSION,
     demo: DEMO,
     settings: STORE.settings(),
-    providers,
+    providers: STORE.providers(),
     personas: STORE.personas(),
     conversations: STORE.conversations(),
-    workbuddy: statuses,
-    download: DEMO ? null : await DOWNLOADER.status(),
   };
 }
 
@@ -479,72 +476,28 @@ async function generateImage({ prompt, negative = "", seed, width = 768, height 
 async function handleApi(req, res, url) {
   const pathname = url.pathname;
 
+  if (!hasSession(req, url)) {
+    return sendJson(res, 401, { error: "Unauthorized" });
+  }
+
+  if (
+    ["POST", "PUT", "PATCH"].includes(req.method || "") &&
+    hasJsonBody(req) &&
+    pathname !== "/api/app/closed" &&
+    pathname !== "/api/ping"
+  ) {
+    const contentType = String(req.headers["content-type"] || "").toLowerCase();
+    if (!contentType.startsWith("application/json")) {
+      return sendJson(res, 415, { error: "Content-Type must be application/json" });
+    }
+  }
+
   if (req.method === "GET" && pathname === "/api/health") {
     return sendJson(res, 200, { ok: true, version: APP_VERSION });
   }
 
   if (req.method === "GET" && pathname === "/api/bootstrap") {
     return sendJson(res, 200, await bootstrap());
-  }
-
-  if (req.method === "GET" && pathname === "/api/workbuddy/status") {
-    return sendJson(res, 200, {
-      cn: await WORKBUDDY.status("cn"),
-      global: await WORKBUDDY.status("global"),
-    });
-  }
-
-  if (req.method === "GET" && pathname === "/api/downloads/workbuddy/status") {
-    return sendJson(res, 200, await DOWNLOADER.status());
-  }
-
-  if (req.method === "POST" && pathname === "/api/downloads/workbuddy/start") {
-    return sendJson(res, 200, await DOWNLOADER.start());
-  }
-
-  if (req.method === "POST" && pathname === "/api/downloads/workbuddy/cancel") {
-    return sendJson(res, 200, await DOWNLOADER.cancel());
-  }
-
-  if (req.method === "POST" && pathname === "/api/downloads/workbuddy/open") {
-    await DOWNLOADER.openFolder();
-    return sendJson(res, 200, { ok: true });
-  }
-
-  if (req.method === "POST" && pathname === "/api/downloads/workbuddy/run") {
-    try {
-      await DOWNLOADER.runInstaller();
-      return sendJson(res, 200, { ok: true });
-    } catch (error) {
-      return sendJson(res, 404, { error: `安装包尚未下载完成：${error.message}` });
-    }
-  }
-
-  if (req.method === "POST" && pathname === "/api/workbuddy/account") {
-    const body = await readJson(req);
-    const region = body.region === "global" ? "global" : "cn";
-    await WORKBUDDY.selectAccount(region, body.accountId || "");
-    const provider = STORE.rawProvider(region === "global" ? "workbuddy-global" : "workbuddy-cn");
-    if (provider) {
-      provider.accountId = body.accountId || "";
-      provider.models = [];
-      await STORE.persist();
-    }
-    return sendJson(res, 200, await WORKBUDDY.status(region));
-  }
-
-  if (req.method === "POST" && pathname === "/api/workbuddy/models") {
-    const body = await readJson(req);
-    const region = body.region === "global" ? "global" : "cn";
-    const provider = STORE.rawProvider(region === "global" ? "workbuddy-global" : "workbuddy-cn");
-    if (!provider) return sendJson(res, 404, { error: "Provider 不存在" });
-    try {
-      const result = await WORKBUDDY.models(region, Boolean(body.refresh));
-      const models = await saveProviderModels(provider.id, result.models);
-      return sendJson(res, 200, { ...result, models, providerId: provider.id });
-    } catch (error) {
-      return sendJson(res, 400, { error: error instanceof Error ? error.message : String(error) });
-    }
   }
 
   if (req.method === "GET" && pathname === "/api/conversations") {
@@ -592,7 +545,7 @@ async function handleApi(req, res, url) {
     const before = STORE.conversation(id);
     if (!before) return sendJson(res, 404, { error: "会话不存在" });
     if (body.modelId && body.modelId !== before.modelId) {
-      const provider = findProvider(body.providerId || before.providerId) || findProvider("workbuddy-cn");
+      const provider = findProvider(body.providerId || before.providerId) || STORE.providers()[0];
       const label = body.modelLabel || modelLabel(provider, body.modelId);
       await STORE.appendMessage(id, {
         id: uid("m_"),
@@ -652,17 +605,6 @@ async function handleApi(req, res, url) {
   if (providerTest && req.method === "POST") {
     const provider = findProvider(providerTest[1]);
     if (!provider) return sendJson(res, 404, { error: "接口不存在" });
-    if (provider.kind === "workbuddy") {
-      const status = await WORKBUDDY.status(provider.region);
-      if (!status.signedIn) return sendJson(res, 200, { ok: false, error: status.error || "未登录" });
-      try {
-        const result = await WORKBUDDY.models(provider.region, true);
-        const models = await saveProviderModels(provider.id, result.models);
-        return sendJson(res, 200, { ok: true, models: models.length, sample: "凭据有效，模型列表已刷新" });
-      } catch (error) {
-        return sendJson(res, 200, { ok: false, error: error instanceof Error ? error.message : String(error) });
-      }
-    }
     return sendJson(res, 200, await testProvider(provider));
   }
 
@@ -671,11 +613,6 @@ async function handleApi(req, res, url) {
     const provider = findProvider(providerModels[1]);
     if (!provider) return sendJson(res, 404, { error: "接口不存在" });
     try {
-      if (provider.kind === "workbuddy") {
-        const result = await WORKBUDDY.models(provider.region, true);
-        const models = await saveProviderModels(provider.id, result.models);
-        return sendJson(res, 200, { ...result, models });
-      }
       const fetched = await fetchModels(provider);
       const models = await saveProviderModels(provider.id, fetched);
       return sendJson(res, 200, { models, source: "live" });
@@ -908,10 +845,7 @@ async function handleChat(req, res) {
       ...handlers,
     };
 
-    const run = () =>
-      provider.kind === "workbuddy"
-        ? WORKBUDDY.chat(provider.region, request)
-        : chatOpenAI(provider, request);
+    const run = () => chatOpenAI(provider, request);
 
     try {
       await run();
@@ -998,12 +932,15 @@ async function serveStatic(req, res, url) {
   try {
     const stat = await fs.stat(resolved);
     if (stat.isDirectory()) return sendText(res, 404, "Not found");
-    const data = await fs.readFile(resolved);
+    let data = await fs.readFile(resolved);
     const ext = path.extname(resolved).toLowerCase();
+    if (ext === ".html") {
+      data = Buffer.from(data.toString("utf8").replaceAll("__OWNCHAT_TOKEN__", SESSION_TOKEN));
+    }
     res.writeHead(200, {
       "Content-Type": MIME[ext] || "application/octet-stream",
       "Content-Length": data.length,
-      "Cache-Control": ext === ".html" ? "no-store" : "public, max-age=60",
+      "Cache-Control": [".html", ".js", ".css"].includes(ext) ? "no-store" : "public, max-age=3600",
     });
     res.end(data);
   } catch {
@@ -1018,26 +955,16 @@ async function main() {
     process.exit(0);
   }
   process.on("exit", releaseInstanceLock);
-  await DOWNLOADER.init();
-  if (!DEMO) {
-    WORKBUDDY.init().then(async () => {
-      for (const region of ["cn", "global"]) {
-        const status = await WORKBUDDY.status(region).catch(() => null);
-        if (!status?.signedIn) continue;
-        try {
-          const result = await WORKBUDDY.models(region, true);
-          await saveProviderModels(region === "global" ? "workbuddy-global" : "workbuddy-cn", result.models);
-          log(`WorkBuddy ${region}: ${result.models.length} models`);
-        } catch (error) {
-          log(`WorkBuddy ${region} model refresh failed:`, error.message);
-        }
-      }
-    });
-  }
 
   const server = http.createServer(async (req, res) => {
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("Referrer-Policy", "no-referrer");
+    res.setHeader("X-Frame-Options", "DENY");
     try {
       const url = new URL(req.url || "/", `http://${req.headers.host || "127.0.0.1"}`);
+      if (!isLocalRequest(req)) {
+        return sendJson(res, 403, { error: "Forbidden" });
+      }
       if (url.pathname.startsWith("/api/")) {
         await handleApi(req, res, url);
       } else {

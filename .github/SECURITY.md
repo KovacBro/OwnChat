@@ -2,8 +2,8 @@
 
 ## Supported versions
 
-Only the latest minor release receives security fixes. Patch releases are
-source-only and do not get installer assets.
+Only the latest release receives security fixes. Patch releases normally stay
+source-only, but a patch with a migration or security fix may ship an installer.
 
 | Version | Supported |
 |---|---|
@@ -32,11 +32,12 @@ released as a patch version and credited unless you ask otherwise.
 In scope:
 
 - decryption or exfiltration of stored API keys;
-- path traversal in upload, avatar or download handling;
+- path traversal in upload or avatar handling;
 - SSRF or request smuggling in the provider proxy;
 - Markdown or HTML injection that executes script in the app window;
-- bypassing the `127.0.0.1` bind or exposing the local API to the network;
-- signature or hash verification bypass in the downloader.
+- bypassing the `127.0.0.1` bind, the per-launch API token, or the local
+  `Origin`/`Host` checks;
+- theft or exfiltration of a provider key through the local API.
 
 Out of scope:
 

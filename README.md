@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/assets/app-preview.png" alt="OwnChat screenshot" width="920">
+  <img src="docs/assets/app-preview-0.2.3.png" alt="OwnChat providers page" width="920">
 </p>
 
 <h1 align="center">OwnChat</h1>
@@ -19,9 +19,9 @@
 <p align="center">
   <a href="README.zh-CN.md">中文说明</a> ·
   <a href="#install">Install</a> ·
-  <a href="#bring-your-own-model">Providers</a> ·
-  <a href="#faq">FAQ</a> ·
-  <a href="ROADMAP.md">Roadmap</a>
+  <a href="#bring-your-own-key">Providers</a> ·
+  <a href="#privacy-and-boundaries">Privacy</a> ·
+  <a href="#faq">FAQ</a>
 </p>
 
 ---
@@ -35,17 +35,32 @@ switch models a hundred times without losing a single message.
 It runs entirely on your machine: a small local server on `127.0.0.1`, your API
 keys encrypted at rest, and no cloud account of any kind.
 
+## What changed in 0.2.3
+
+- **Provider presets instead of manual endpoint setup.** Pick a provider; its
+  base URL, protocol and common models are already filled in. You bring the key.
+- **A short setup guide for every preset.** The form links to the provider's
+  console and docs and lists the 3–4 steps needed to get a key.
+- **The old local third-party credential bridge is gone.** OwnChat now only talks
+  to OpenAI-compatible endpoints you configure yourself, and never reads another
+  app's login state.
+- **The local API now requires a per-launch token.** The server still binds only
+  to `127.0.0.1`, and also checks `Origin`/`Host` plus JSON content types.
+- **Upgrade cleanup.** Providers and model bindings left behind by the removed
+  bridge are cleared on startup.
+
+Full notes: [`docs/releases/0.2.3.md`](docs/releases/0.2.3.md).
+
 ## Why people use it
 
-**One window, every model.** 求索 (DeepSeek), 百炼 (Qwen), 方舟 (Doubao),
-OpenRouter, Gemini, Groq, SiliconFlow, Zhipu, ModelScope, Mistral, Cerebras,
+**One window, every model.** DeepSeek, Alibaba Bailian, Volcengine Ark, Zhipu
+BigModel, Kimi, Tencent Hunyuan, SiliconFlow, OpenRouter, Gemini, Groq, Mistral,
 GitHub Models, Azure OpenAI, a local Ollama — or any OpenAI-compatible endpoint.
-Each conversation remembers its own `provider + model + persona`, so a coding
-chat and a translation chat never interfere.
+Each conversation remembers its own `provider + model + persona`.
 
 **Genuinely local.** No telemetry, no analytics, no sign-in. Keys are encrypted
 with AES-256-GCM and never returned to the browser. The HTTP server binds to
-`127.0.0.1` only.
+`127.0.0.1` only, and state-changing calls need a token generated at launch.
 
 **Light on the machine.** No bundled Electron runtime — OwnChat uses the Edge
 engine already installed on Windows and opens as a frameless app window. The
@@ -59,6 +74,10 @@ you disagree with a design decision.
 `0.2.x` is an early release. The data format may still change before `1.0.0`;
 export your workspace before upgrading across minor versions. Windows only for
 now. The installer is not code-signed yet — see [FAQ](#faq).
+
+`0.2.3` is a patch release. It ships an installer because the removal of the old
+bridge needs to reach existing installs; the project normally keeps patch
+releases source-only.
 
 ## Install
 
@@ -85,50 +104,64 @@ cd OwnChat
 node server.js
 ```
 
-Requires Node.js 22+ and Microsoft Edge. `start.bat` starts the server and opens
-the Edge app window.
+Requires Node.js 22+ and Microsoft Edge.
 
-## Bring your own model
+## Bring your own key
 
 OwnChat ships with no keys and no quota. You point it at a provider you already
 pay for, or at a free tier you registered yourself.
 
+Open **API**, pick a preset, paste your key, click **Save and connect**. The base
+URL is already set; after saving, OwnChat calls the provider's `/models` endpoint
+and fills in the current model list.
+
+<p align="center">
+  <img src="docs/assets/provider-setup-0.2.3.png" alt="Provider setup form" width="760">
+</p>
+
+### Built-in presets
+
 | Provider | Base URL | Key |
 |---|---|---|
-| **求索** (DeepSeek) | `https://api.deepseek.com/v1` | Required |
-| **百炼** (Alibaba Bailian) | `https://dashscope.aliyuncs.com/compatible-mode/v1` | Required |
-| **方舟** (Volcengine Ark) | `https://ark.cn-beijing.volces.com/api/v3` | Required |
-| OpenRouter | `https://openrouter.ai/api/v1` | Required |
-| Google Gemini | `https://generativelanguage.googleapis.com/v1beta/openai/` | Required |
-| Groq | `https://api.groq.com/openai/v1` | Required |
-| SiliconFlow | `https://api.siliconflow.cn/v1` | Required |
-| Zhipu BigModel | `https://open.bigmodel.cn/api/paas/v4` | Required |
-| ModelScope | `https://api-inference.modelscope.cn/v1` | Required |
-| Mistral | `https://api.mistral.ai/v1` | Required |
-| Cerebras | `https://api.cerebras.ai/v1` | Required |
-| GitHub Models | `https://models.github.ai/inference` | GitHub token |
-| Ollama (local) | `http://127.0.0.1:11434/v1` | None |
-| Custom / Azure | any OpenAI-compatible URL | Optional |
+| **DeepSeek** | `https://api.deepseek.com` | Required |
+| **Alibaba Bailian** | `https://dashscope.aliyuncs.com/compatible-mode/v1` | Required |
+| **Volcengine Ark** | `https://ark.cn-beijing.volces.com/api/v3` | Key + endpoint ID |
+| **Zhipu BigModel** | `https://open.bigmodel.cn/api/paas/v4` | Required |
+| **Kimi** | `https://api.moonshot.cn/v1` | Required |
+| **Tencent Hunyuan** | `https://api.hunyuan.cloud.tencent.com/v1` | Required |
+| **SiliconFlow** | `https://api.siliconflow.cn/v1` | Required |
+| **OpenRouter** | `https://openrouter.ai/api/v1` | Required |
+| **Google Gemini** | `https://generativelanguage.googleapis.com/v1beta/openai/` | Required |
+| **Groq** | `https://api.groq.com/openai/v1` | Required |
+| **Mistral** | `https://api.mistral.ai/v1` | Required |
+| **GitHub Models** | `https://models.github.ai/inference` | GitHub token |
+| **Ollama (local)** | `http://127.0.0.1:11434/v1` | None |
+| **Azure OpenAI** | Your resource endpoint | Key + deployment |
+| **Custom** | Any OpenAI-compatible URL | Optional |
 
-Every provider card exposes the full request surface when you need it: context
-window, max output, temperature, Top P, custom headers and body, timeout, vision
-capability, test-connection and model discovery.
+Each preset includes its own console link, docs link and step-by-step setup notes.
+If a provider renames a model, use **Refresh models** — no code change needed.
 
-### The three domestic presets
+### Notes for specific providers
 
-They sit outside the persona system — no avatar, no character prompt — and each
-opens a conversation with the plain assistant in one click.
+- **Volcengine Ark** creates an inference endpoint per model; the model ID is the
+  `ep-…` string, not the public model name.
+- **GitHub Models** works with a fine-grained token that has only Models read
+  access. Do not grant repository permissions.
+- **Ollama** needs `ollama pull <model>` and a running local server on port 11434.
+- **Azure OpenAI** needs the endpoint, key, deployment name and API version in
+  the advanced section.
+- **Anything else** can go through **Custom**, as long as it implements
+  `/chat/completions`.
 
-| Preset | What it is for | Notes |
-|---|---|---|
-| **求索** | General chat, writing, translation | DeepSeek's official API, `deepseek-chat` / `deepseek-reasoner` |
-| **百炼** | Long documents, images, enterprise calls | The Qwen family: `qwen-plus`, `qwen-max`, `qwen-vl` |
-| **方舟** | Doubao models, role-play, voice | Create an inference endpoint in the Ark console; the model name is the `ep-…` ID |
+Every provider card also exposes context window, max output, temperature, Top P,
+custom headers/body, timeout, vision capability, connection test and model
+discovery.
 
 Free tiers and model IDs change constantly. OwnChat does not bundle any keys and
 does not promise unlimited free usage.
 
-## Privacy
+## Privacy and security
 
 ```text
 data/
@@ -143,6 +176,8 @@ data/
 - API keys are encrypted at rest; the frontend only ever receives `hasKey`.
 - Export excludes API keys.
 - No cloud sync, no telemetry, no crash reporting.
+- The server binds to `127.0.0.1` only; API calls need a per-launch token and are
+  checked for local `Origin`/`Host`.
 - Local application-level encryption is not a substitute for Windows Credential
   Manager against an administrator-level attacker.
 
@@ -150,16 +185,29 @@ Your prompts and replies go to the provider **you** configured, and nowhere
 else. If you use an overseas endpoint, your data leaves your machine — that is
 your choice to make, and the app does not hide it.
 
-## Advanced: WorkBuddy integration
+## Privacy and boundaries
 
-If you already run the WorkBuddy desktop app and the local
-`dsh-connect-workbuddy` plugin, OwnChat can read that plugin's **existing local
-credential vault** and reuse its model catalog. It does not create accounts, does
-not proxy through our servers, and does not upload credentials anywhere.
+OwnChat does one thing: it sends what you type to the model endpoint you
+configured and brings the reply back.
 
-OwnChat is not affiliated with WorkBuddy or Tencent and does not provide, resell
-or share any third-party subscription, quota or account. Use it only with
-accounts you are entitled to use, under that vendor's terms.
+- It does **not** provide, resell or share any third-party account, subscription,
+  quota or API key.
+- It does **not** read another app's login credentials, and it does not require a
+  third-party desktop client to work.
+- Use only keys you are entitled to use, and follow the provider's terms, billing
+  rules and regional restrictions.
+- The provider decides how your input is processed, whether it is used for
+  training, and where it is stored. That is between you and the provider.
+- OwnChat is not affiliated with DeepSeek, Alibaba, Volcengine, Zhipu, Moonshot,
+  Tencent, OpenRouter, Google, Groq, Mistral, GitHub or Microsoft, and is not
+  endorsed by them.
+- Third-party names are trademarks of their respective owners and are used only
+  to describe compatibility.
+
+For organisational use, confirm account ownership, the data processing
+agreement, cross-border transfer, employee notice and confidentiality
+requirements first. OwnChat is a local tool; it does not complete those
+organisational obligations for you.
 
 ## Enterprise and private deployment
 
@@ -174,43 +222,23 @@ organisation, open a discussion or mail the address in the repo profile.
 
 ## Screenshots
 
-| Light | Dark |
+| Providers | Setup |
 |---|---|
-| ![Chat](docs/assets/shots/app-light-chat.png) | ![Chat, dark](docs/assets/shots/app-dark-chat.png) |
-| ![Providers](docs/assets/shots/app-light-providers.png) | ![Providers, dark](docs/assets/shots/app-dark-providers.png) |
-
-More: [`docs/assets/shots/`](docs/assets/shots) — personas and settings, light and dark.
-
-## Known limitations
-
-- Voice is not in the roadmap.
-- File and screenshot sending are not available yet.
-- Very long conversations render in one pass; 1,000+ messages may feel slow.
-- Anthropic Messages and Gemini native protocols are not implemented; use
-  OpenRouter or an OpenAI-compatible gateway for Claude.
-- WorkBuddy multi-account auto-rotation is not exposed yet.
-- The installer is unsigned; verify checksums.
-
-Upgrading keeps `data/`. Uninstalling keeps it too — the uninstaller only
-removes the app files and the Edge profile. Delete `data/` by hand for a clean
-wipe.
+| ![Providers](docs/assets/app-preview-0.2.3.png) | ![Setup](docs/assets/provider-setup-0.2.3.png) |
 
 ## FAQ
 
 **Do I need an account?** No. There is no sign-up, no login, no device limit.
 
-**How do I open it, and how do I quit?** Launch it from the Start Menu or the
-desktop shortcut. Closing the window stops the local server after a few seconds.
-If you want it to stay up in the background, enable “关窗口后继续后台运行” in
-Settings and reopen it from the same shortcut. Two launches never start two
-servers — the second one reuses the first.
+**Where does my data go?** Only to the provider you configure. See
+[Privacy and security](#privacy-and-security).
 
-**Where does my data go?** Nowhere except the provider you configure. See
-[Privacy](#privacy).
+**Is my key uploaded?** Not to OwnChat's servers. It is encrypted locally and sent
+only to the provider you selected.
 
 **Is it code-signed?** Not yet. Windows SmartScreen may say "Unknown publisher";
-verify `SHA256SUMS.txt` from the release assets before installing. Code signing
-is planned for `1.0.0`.
+verify `SHA256SUMS.txt` from the release assets. Code signing is planned for
+`1.0.0`.
 
 **Does it work offline?** Yes, with Ollama or any local OpenAI-compatible server.
 
@@ -222,10 +250,9 @@ is Windows-first.
 
 ## Roadmap
 
-See [ROADMAP.md](ROADMAP.md). `0.2.0` (2026-10-22) added the reliability pass:
-account/region UX, per-model capabilities, retry with diagnostics, search,
-archive, export/import, dark theme, and data-preserving upgrades. `0.3.0` moves
-on to attachments and richer chat.
+See [ROADMAP.md](ROADMAP.md). `0.2.3` is about removing the old third-party
+dependency and making provider setup simple. `0.3.0` moves on to attachments and
+richer chat.
 
 Voice is **not** in the roadmap.
 
@@ -242,9 +269,3 @@ Bug reports and pull requests are welcome — please read
 Versions up to and including `v0.1.0` were released under the MIT license; that
 grant is irrevocable and remains in force for those tags. Starting with `0.2.0`,
 the project is licensed under AGPL-3.0.
-
-OwnChat is not affiliated with WorkBuddy, Tencent, DeepSeek, Zhipu, or any model
-provider. Third-party names are trademarks of their respective owners.
-
-<!-- TODO(marketing): replace the hero screenshot with one that does not show a
-     vendor-branded provider, and add a 10-second demo GIF below. -->

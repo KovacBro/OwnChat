@@ -1,4 +1,4 @@
-; OwnChat installer (Inno Setup 6)
+﻿; OwnChat installer (Inno Setup 6)
 ; Build from the repository root:
 ;   powershell -File installer\build-release.ps1 -Version 0.2.0
 ;
@@ -11,7 +11,7 @@
 ;   stop with a readable message instead of a raw Win32 error.
 
 #ifndef MyAppVersion
-  #define MyAppVersion "0.2.2"
+  #define MyAppVersion "0.2.3"
 #endif
 
 #define MyAppName "OwnChat"
