@@ -1,0 +1,14 @@
+{
+  "name": "ownchat",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Local-first multi-model desktop chat with WorkBuddy adapter",
+  "scripts": {
+    "start": "node server.js --open",
+    "dev": "node server.js"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

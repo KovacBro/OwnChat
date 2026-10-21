@@ -1,0 +1,22 @@
+# runtime data
+data/
+downloads/
+*.log
+
+# build artifacts
+dist/
+.build/
+*.tmp
+
+# local dev tools / scratch
+scripts/
+docs/.edge-*/
+docs/avatar-test/
+docs/OwnChat-*.md
+docs/visual-mockup.*
+
+# secrets
+.github-token
+
+# dependencies (not used)
+node_modules/
