@@ -9,6 +9,10 @@ Set-Location $root
 if ($Version -notmatch '^\d+\.\d+\.\d+$') {
   throw "Version must be MAJOR.MINOR.PATCH, got: $Version"
 }
+$parts = $Version.Split('.')
+if ($parts[2] -ne '0') {
+  throw "Only MAJOR.MINOR.0 releases get installers. Patch releases are source-only."
+}
 
 $iscc = "C:\Users\$env:USERNAME\AppData\Local\Programs\Inno Setup 6\ISCC.exe"
 if (-not (Test-Path $iscc)) {
