@@ -50,6 +50,18 @@ Theme: reliable daily driver. No new dependencies, no cloud, no telemetry.
 - Added `.github/` community files: issue forms, CONTRIBUTING (no dependencies,
   no telemetry, no third-party quota features, `127.0.0.1` only) and SECURITY.
 
+### Fixed
+
+- Desktop shortcut is created by default. It used to be opt-in, so most users
+  never found it and only had the Start Menu entry.
+- The app window and taskbar now use the OwnChat icon instead of a persona
+  avatar, which looked like a different product.
+- A second launch no longer starts a second server over the same `data/`
+  directory. A lock file plus a liveness check makes the new process exit and
+  reuse the running instance.
+- Closing the window can keep the server alive (Settings → 关窗口后继续后台运行),
+  so a long session survives; reopen it from the same shortcut.
+
 ### Notes
 
 - Smoke-test pass on a real Windows install is still required; this changelog

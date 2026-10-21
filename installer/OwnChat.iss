@@ -34,6 +34,7 @@ DisableProgramGroupPage=yes
 DisableDirPage=no
 PrivilegesRequired=lowest
 UsePreviousAppDir=yes
+UsePreviousTasks=no
 CloseApplications=yes
 RestartApplications=no
 SetupLogging=yes
@@ -58,7 +59,7 @@ LicenseFile=..\LICENSE
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
-Name: "desktopicon"; Description: "创建桌面快捷方式"; GroupDescription: "附加任务:"; Flags: unchecked
+Name: "desktopicon"; Description: "创建桌面快捷方式"; GroupDescription: "附加任务:"
 
 [Files]
 Source: "..\.build\staging\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion

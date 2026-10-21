@@ -185,6 +185,12 @@ wipe.
 
 **Do I need an account?** No. There is no sign-up, no login, no device limit.
 
+**How do I open it, and how do I quit?** Launch it from the Start Menu or the
+desktop shortcut. Closing the window stops the local server after a few seconds.
+If you want it to stay up in the background, enable “关窗口后继续后台运行” in
+Settings and reopen it from the same shortcut. Two launches never start two
+servers — the second one reuses the first.
+
 **Where does my data go?** Nowhere except the provider you configure. See
 [Privacy](#privacy).
 

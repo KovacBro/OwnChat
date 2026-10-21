@@ -1,5 +1,5 @@
 import http from "node:http";
-import { promises as fs, existsSync as fsSyncExists, readFileSync } from "node:fs";
+import { promises as fs, existsSync as fsSyncExists, readFileSync, rmSync } from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { spawn } from "node:child_process";
@@ -45,6 +45,53 @@ const MIME = {
   ".txt": "text/plain; charset=utf-8",
 };
 let appCloseTimer = null;
+
+/* ---------- single instance ---------- */
+// Two servers writing the same data/ directory would corrupt conversations.
+// The lock is advisory: it records the pid and is cleaned up on exit.
+const LOCK_FILE = path.join(DATA_DIR, "server.lock");
+
+function pidAlive(pid) {
+  if (!pid) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return error.code === "EPERM";
+  }
+}
+
+async function acquireInstanceLock() {
+  const write = async () => {
+    const handle = await fs.open(LOCK_FILE, "wx");
+    try {
+      await handle.writeFile(JSON.stringify({ pid: process.pid, startedAt: Date.now() }));
+    } finally {
+      await handle.close();
+    }
+  };
+  try {
+    await write();
+    return true;
+  } catch (error) {
+    if (error.code !== "EEXIST") throw error;
+  }
+  let owner = null;
+  try {
+    owner = JSON.parse(await fs.readFile(LOCK_FILE, "utf8"));
+  } catch {}
+  if (owner?.pid && pidAlive(owner.pid)) return false;
+  await fs.rm(LOCK_FILE, { force: true });
+  await write();
+  return true;
+}
+
+function releaseInstanceLock() {
+  try {
+    const owner = JSON.parse(readFileSync(LOCK_FILE, "utf8"));
+    if (owner?.pid === process.pid) rmSync(LOCK_FILE, { force: true });
+  } catch {}
+}
 
 function log(...args) {
   console.log(new Date().toISOString(), ...args);
@@ -698,7 +745,7 @@ async function handleApi(req, res, url) {
   }
 
   if (req.method === "POST" && pathname === "/api/app/closed") {
-    if (SETTINGS.open) {
+    if (SETTINGS.open && !STORE.settings().keepRunning) {
       clearTimeout(appCloseTimer);
       appCloseTimer = setTimeout(() => {
         log("OwnChat window closed; shutting down");
@@ -957,6 +1004,11 @@ async function serveStatic(req, res, url) {
 
 async function main() {
   await STORE.init();
+  if (!(await acquireInstanceLock())) {
+    log("OwnChat is already running; reusing the existing instance.");
+    process.exit(0);
+  }
+  process.on("exit", releaseInstanceLock);
   await DOWNLOADER.init();
   if (!DEMO) {
     WORKBUDDY.init().then(async () => {

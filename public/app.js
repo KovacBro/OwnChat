@@ -2317,6 +2317,7 @@ function renderSettings() {
             <option value="dark" ${s.theme === "dark" ? "selected" : ""}>深色</option>
           </select></div>
           <div class="field"><label class="check"><input type="checkbox" id="set-usage" ${s.showTokenUsage !== false ? "checked" : ""}> 显示 token 用量</label></div>
+          <div class="field"><label class="check"><input type="checkbox" id="set-keep" ${s.keepRunning ? "checked" : ""}> 关窗口后继续后台运行</label></div>
         </div>
         <div class="form-actions"><button class="btn primary" id="save-settings">保存设置</button></div>
       </div>
@@ -2381,6 +2382,7 @@ async function saveSettings() {
         contextChars: Number($("#set-ctx").value) || 48000,
         theme: $("#set-theme").value,
         showTokenUsage: $("#set-usage").checked,
+        keepRunning: $("#set-keep").checked,
       }),
     });
     state.settings = data.settings;
