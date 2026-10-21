@@ -8,6 +8,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 Only `MAJOR.MINOR.0` releases (0.1.0, 0.2.0, …, 1.0.0) receive installer
 assets on GitHub Releases. Patch releases are source-only.
 
+## [0.2.1] — 2026-10-22
+
+三个国内平台的直连预设。它们**独立于「娘」人格**存在：用默认助手人格，
+不带头像设定，点一下就能建会话。
+
+### Added
+
+- **求索（DeepSeek 官方接口）** — `https://api.deepseek.com/v1`
+  定位：通用对话与写作。中文强、模型少而稳（`deepseek-chat` / `deepseek-reasoner`）、按量计费。
+- **百炼（阿里云百炼）** — `https://dashscope.aliyuncs.com/compatible-mode/v1`
+  定位：长上下文与多模态。通义千问全系（`qwen-plus` / `qwen-max` / `qwen-vl`），适合长文档、图片输入、企业级稳定调用。
+- **方舟（火山方舟）** — `https://ark.cn-beijing.volces.com/api/v3`
+  定位：豆包系列，角色与语音场景。需先在方舟控制台创建「推理接入点」，模型名填 `ep-` 开头的 ID。
+- 「新建会话」弹窗拆成 **人格 / 平台直连 / 任意模型** 三段。平台卡片显示当前状态
+  （未配置 / 待拉取模型 / N 个模型）；未配置时点击直接打开预填好的接口表单。
+- 新增内置的「助手」人格（`hidden`，不出现在人格列表里），供平台直连使用。
+
+### Fixed
+
+- 旧版本数据在升级后会自动补上「助手」人格，不需要手动迁移。
+
+### Notes
+
+- 这三个入口**不内置 Key、不代注册**。Key 要到对应平台的控制台自己申请。
+- 「求索」只是界面里的显示名，接口地址仍是 DeepSeek 官方域名。
+- 按项目原来的规则，`MAJOR.MINOR.0` 才发安装包，0.2.1 本应是纯源码标签。
+  这次为了让已经装了 0.2.0 的用户能直接升级，破例附带了安装包，规则待确认后再改。
+
+
+
 ## [0.2.0] — 2026-10-22
 
 Theme: reliable daily driver. No new dependencies, no cloud, no telemetry.
@@ -129,6 +159,7 @@ First public baseline. Windows x64 installer:
 - WorkBuddy multi-account auto-rotation is not exposed in OwnChat yet.
 - No cloud sync; data stays on the local machine.
 
-[Unreleased]: https://github.com/KovacBro/OwnChat/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/KovacBro/OwnChat/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/KovacBro/OwnChat/releases/tag/v0.2.1
 [0.2.0]: https://github.com/KovacBro/OwnChat/releases/tag/v0.2.0
 [0.1.0]: https://github.com/KovacBro/OwnChat/releases/tag/v0.1.0

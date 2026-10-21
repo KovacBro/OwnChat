@@ -34,7 +34,7 @@ OwnChat 是一个面向 Windows 的桌面 AI 聊天客户端，给那些**本来
 
 ## 为什么用它
 
-**一个窗口管所有模型。** OpenRouter、Gemini、Groq、硅基流动、智谱、ModelScope、Mistral、
+**一个窗口管所有模型。** 求索、百炼、方舟、OpenRouter、Gemini、Groq、硅基流动、智谱、ModelScope、Mistral、
 Cerebras、GitHub Models、Azure OpenAI、本地 Ollama，或者任何 OpenAI 兼容地址。
 每个会话各自记住 `接口 + 模型 + 人格`——写代码的会话和翻译的会话互不干扰。
 
@@ -88,6 +88,9 @@ OwnChat **不带任何 Key，也不提供额度**。你接自己已经付费的�
 
 | 平台 | Base URL | Key |
 |---|---|---|
+| **求索**（DeepSeek） | `https://api.deepseek.com/v1` | 需要 |
+| **百炼**（阿里云） | `https://dashscope.aliyuncs.com/compatible-mode/v1` | 需要 |
+| **方舟**（火山引擎） | `https://ark.cn-beijing.volces.com/api/v3` | 需要 |
 | OpenRouter | `https://openrouter.ai/api/v1` | 需要 |
 | Google Gemini | `https://generativelanguage.googleapis.com/v1beta/openai/` | 需要 |
 | Groq | `https://api.groq.com/openai/v1` | 需要 |
@@ -99,6 +102,16 @@ OwnChat **不带任何 Key，也不提供额度**。你接自己已经付费的�
 | GitHub Models | `https://models.github.ai/inference` | GitHub Token |
 | Ollama（本地） | `http://127.0.0.1:11434/v1` | 不需要 |
 | 自定义 / Azure | 任意 OpenAI 兼容地址 | 可选 |
+
+### 三个国内预设
+
+它们**不绑定人格**——没有头像、没有角色设定，点一下就用默认助手开一个会话。
+
+| 预设 | 定位 | 说明 |
+|---|---|---|
+| **求索** | 通用对话、写作、翻译 | DeepSeek 官方接口，`deepseek-chat` / `deepseek-reasoner` |
+| **百炼** | 长文档、图片、企业级调用 | 通义千问全系：`qwen-plus`、`qwen-max`、`qwen-vl` |
+| **方舟** | 豆包系列、角色与语音 | 先在方舟控制台建「推理接入点」，模型名填 `ep-…` 那个 ID |
 
 每个接口卡片都能展开完整参数：上下文窗口、最大输出、温度、Top P、自定义请求头与请求体、
 超时、视觉能力开关、测试连接、拉取模型列表。

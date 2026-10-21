@@ -1,5 +1,8 @@
 param(
-  [string]$Version = "0.2.0"
+  [string]$Version = "0.2.1",
+  # Patch releases are source-only by default; this switch is the documented
+  # escape hatch for a patch that still needs an in-place upgrade path.
+  [switch]$AllowPatchInstaller
 )
 
 $ErrorActionPreference = "Stop"
@@ -10,8 +13,8 @@ if ($Version -notmatch '^\d+\.\d+\.\d+$') {
   throw "Version must be MAJOR.MINOR.PATCH, got: $Version"
 }
 $parts = $Version.Split('.')
-if ($parts[2] -ne '0') {
-  throw "Only MAJOR.MINOR.0 releases get installers. Patch releases are source-only."
+if ($parts[2] -ne '0' -and -not $AllowPatchInstaller) {
+  throw "Only MAJOR.MINOR.0 releases get installers. Patch releases are source-only (pass -AllowPatchInstaller to override)."
 }
 
 $iscc = "C:\Users\$env:USERNAME\AppData\Local\Programs\Inno Setup 6\ISCC.exe"

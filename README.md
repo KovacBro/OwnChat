@@ -37,11 +37,11 @@ keys encrypted at rest, and no cloud account of any kind.
 
 ## Why people use it
 
-**One window, every model.** OpenRouter, Gemini, Groq, SiliconFlow, Zhipu,
-ModelScope, Mistral, Cerebras, GitHub Models, Azure OpenAI, a local Ollama — or
-any OpenAI-compatible endpoint. Each conversation remembers its own
-`provider + model + persona`, so a coding chat and a translation chat never
-interfere.
+**One window, every model.** 求索 (DeepSeek), 百炼 (Qwen), 方舟 (Doubao),
+OpenRouter, Gemini, Groq, SiliconFlow, Zhipu, ModelScope, Mistral, Cerebras,
+GitHub Models, Azure OpenAI, a local Ollama — or any OpenAI-compatible endpoint.
+Each conversation remembers its own `provider + model + persona`, so a coding
+chat and a translation chat never interfere.
 
 **Genuinely local.** No telemetry, no analytics, no sign-in. Keys are encrypted
 with AES-256-GCM and never returned to the browser. The HTTP server binds to
@@ -95,6 +95,9 @@ pay for, or at a free tier you registered yourself.
 
 | Provider | Base URL | Key |
 |---|---|---|
+| **求索** (DeepSeek) | `https://api.deepseek.com/v1` | Required |
+| **百炼** (Alibaba Bailian) | `https://dashscope.aliyuncs.com/compatible-mode/v1` | Required |
+| **方舟** (Volcengine Ark) | `https://ark.cn-beijing.volces.com/api/v3` | Required |
 | OpenRouter | `https://openrouter.ai/api/v1` | Required |
 | Google Gemini | `https://generativelanguage.googleapis.com/v1beta/openai/` | Required |
 | Groq | `https://api.groq.com/openai/v1` | Required |
@@ -110,6 +113,17 @@ pay for, or at a free tier you registered yourself.
 Every provider card exposes the full request surface when you need it: context
 window, max output, temperature, Top P, custom headers and body, timeout, vision
 capability, test-connection and model discovery.
+
+### The three domestic presets
+
+They sit outside the persona system — no avatar, no character prompt — and each
+opens a conversation with the plain assistant in one click.
+
+| Preset | What it is for | Notes |
+|---|---|---|
+| **求索** | General chat, writing, translation | DeepSeek's official API, `deepseek-chat` / `deepseek-reasoner` |
+| **百炼** | Long documents, images, enterprise calls | The Qwen family: `qwen-plus`, `qwen-max`, `qwen-vl` |
+| **方舟** | Doubao models, role-play, voice | Create an inference endpoint in the Ark console; the model name is the `ep-…` ID |
 
 Free tiers and model IDs change constantly. OwnChat does not bundle any keys and
 does not promise unlimited free usage.

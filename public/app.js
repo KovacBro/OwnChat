@@ -37,6 +37,30 @@ const state = {
 };
 
 const PRESETS = {
+  qiusuo: {
+    name: "求索",
+    baseUrl: "https://api.deepseek.com/v1",
+    model: "deepseek-chat",
+    role: "通用对话与写作",
+    note: "中文强、按量计费、模型少而稳",
+    platform: true,
+  },
+  bailian: {
+    name: "百炼",
+    baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    model: "qwen-plus",
+    role: "长上下文与多模态",
+    note: "通义千问全系，长文档、图片、企业级稳定",
+    platform: true,
+  },
+  fangzhou: {
+    name: "方舟",
+    baseUrl: "https://ark.cn-beijing.volces.com/api/v3",
+    model: "",
+    role: "豆包系列 · 角色与语音",
+    note: "需先在方舟控制台创建推理接入点，模型名填 ep- 开头",
+    platform: true,
+  },
   openrouter: {
     name: "OpenRouter",
     baseUrl: "https://openrouter.ai/api/v1",
@@ -104,6 +128,9 @@ const PRESETS = {
     note: "任意 OpenAI 兼容 API",
   },
 };
+
+// 平台直连：独立于「娘」人格存在的三个预设入口
+const PLATFORM_PRESETS = ["qiusuo", "bailian", "fangzhou"];
 
 const AVATAR_PROMPTS = {
   deepseek: {
@@ -554,6 +581,7 @@ function renderMain() {
 
 function renderEmptyChat() {
   const cards = state.personas
+    .filter((p) => !p.hidden)
     .slice(0, 6)
     .map((p) => {
       const provider = providerOf(p.providerId);
@@ -1164,7 +1192,8 @@ function openModelPicker() {
 
 /* ---------- new chat ---------- */
 function openNewChat() {
-  const cards = state.personas
+  const personaCards = state.personas
+    .filter((persona) => !persona.hidden)
     .map((persona) => {
       const provider = providerOf(persona.providerId);
       const ready = providerReady(provider);
@@ -1175,6 +1204,20 @@ function openNewChat() {
         </button>`;
     })
     .join("");
+  const platformCards = PLATFORM_PRESETS.map((key) => {
+    const preset = PRESETS[key];
+    if (!preset) return "";
+    const provider = platformProvider(key);
+    const ready = provider ? providerReady(provider) : false;
+    const count = provider?.models?.length || 0;
+    const badge = !provider ? "未配置" : count ? `${count} 个模型` : "待拉取模型";
+    return `
+      <button class="template platform-card" data-platform="${key}">
+        <span class="t-icon" style="background:#e8f7ef;color:#0d8051">${esc(initialOf(preset.name))}</span>
+        <span style="min-width:0"><strong>${esc(preset.name)}</strong><span>${esc(preset.role)}</span></span>
+        <span class="tag ${ready && count ? "green" : ""}" style="margin-left:auto">${esc(badge)}</span>
+      </button>`;
+  }).join("");
   const modelGroups = state.providers
     .filter((provider) => (provider.models || []).length)
     .map((provider) => `
@@ -1191,23 +1234,71 @@ function openNewChat() {
     .join("");
   openModal({
     title: "新建会话",
-    sub: "选择一个人格开始；也可以直接从任意模型开始",
+    sub: "人格与平台直连二选一；也可以从任意已配置的模型开始",
     wide: true,
-    body: `<div class="template-list" style="grid-template-columns:1fr 1fr">${cards}</div>
-      <details style="margin-top:16px" open>
+    body: `
+      <div class="form-section-title" style="margin-top:0">人格</div>
+      <div class="template-list" style="grid-template-columns:1fr 1fr">${personaCards}</div>
+      <div class="form-section-title">平台直连 <span class="muted small" style="font-weight:400">（不绑定人格，使用默认助手）</span></div>
+      <div class="template-list">${platformCards}</div>
+      <details style="margin-top:16px">
         <summary style="cursor:pointer;font-size:12px;font-weight:600;color:#3d3d43">从任意模型开始 <span class="muted small" style="font-weight:400">（会自动创建临时人格）</span></summary>
-        <div style="max-height:300px;overflow-y:auto;padding-right:4px">${modelGroups || '<div class="empty-list" style="margin-top:10px">还没有可用模型</div>'}</div>
+        <div style="max-height:260px;overflow-y:auto;padding-right:4px">${modelGroups || '<div class="empty-list" style="margin-top:10px">还没有可用模型</div>'}</div>
       </details>
-      <div class="notice" style="margin-top:12px">临时人格可以点聊天页标题栏的头像，生成专属头像或改系统提示词。</div>`,
+      <div class="notice" style="margin-top:12px">平台直连用的是你填的 Key；未配置时点一下会直接打开配置表单。</div>`,
     onMount: (root) => {
       $$("[data-new-persona]", root).forEach((button) => {
         button.onclick = () => createConversation(button.dataset.newPersona);
+      });
+      $$("[data-platform]", root).forEach((button) => {
+        button.onclick = () => startFromPlatform(button.dataset.platform);
       });
       $$("[data-new-model]", root).forEach((button) => {
         button.onclick = () => createConversationForModel(button.dataset.newProvider, button.dataset.newModel);
       });
     },
   });
+}
+
+function platformProvider(key) {
+  return state.providers.find((provider) => provider.preset === key) || null;
+}
+
+async function startFromPlatform(key) {
+  const preset = PRESETS[key];
+  if (!preset) return;
+  const provider = platformProvider(key);
+  if (!provider) {
+    closeModal();
+    openProviderForm(null, key);
+    setTimeout(() => toast(`填好 ${preset.name} 的 Key，点「拉取模型」就能用了`), 120);
+    return;
+  }
+  if (!providerReady(provider) || !(provider.models || []).length) {
+    closeModal();
+    openProviderForm(provider, key);
+    setTimeout(() => toast(`补上 Key 或点一次「拉取模型」`), 120);
+    return;
+  }
+  await createConversationOn(provider.id, provider.models[0].id);
+}
+
+async function createConversationOn(providerId, modelId) {
+  try {
+    const data = await api("/api/conversations", {
+      method: "POST",
+      body: JSON.stringify({ personaId: "assistant", providerId, modelId }),
+    });
+    state.conversations.unshift(data.conversation);
+    state.messages[data.conversation.id] = [];
+    closeModal();
+    state.view = "chat";
+    state.activeId = data.conversation.id;
+    renderAll();
+    setTimeout(() => $("#composerInput")?.focus(), 60);
+  } catch (error) {
+    toast(error.message, "err");
+  }
 }
 
 async function createConversationForModel(providerId, modelId) {
@@ -1661,7 +1752,9 @@ function openProviderForm(provider, presetKey) {
     baseUrl: preset?.baseUrl || "",
     model: preset?.model || "",
     protocol: "openai",
-    models: [],
+    // Presets that ship a default model are usable right after saving; the
+    // others (e.g. Ark) need an explicit endpoint id first.
+    models: preset?.model ? [{ id: preset.model, name: preset.model }] : [],
     supportsVision: false,
     supportsStreaming: true,
     temperature: 0.7,
@@ -1709,7 +1802,7 @@ function openProviderForm(provider, presetKey) {
       <button class="btn primary" data-pf-save>保存</button>`,
     onMount: (root) => {
       $("[data-pf-cancel]", root).onclick = closeModal;
-      $("[data-pf-save]", root).onclick = () => saveProviderForm(root, provider);
+      $("[data-pf-save]", root).onclick = () => saveProviderForm(root, provider, presetKey);
       $("[data-pf-fetch]", root).onclick = () => fetchModelsInForm(root, provider);
       const del = $("[data-pf-delete]", root);
       if (del) del.onclick = () => deleteProviderConfirm(provider);
@@ -1758,12 +1851,14 @@ function collectProviderForm(root) {
   };
 }
 
-async function saveProviderForm(root, existing) {
+async function saveProviderForm(root, existing, presetKey = "") {
   try {
     const input = collectProviderForm(root);
     if (!input.name) throw new Error("请填写名称");
     if (!input.baseUrl) throw new Error("请填写 Base URL");
     if (existing?.id) input.id = existing.id;
+    const preset = existing?.preset || presetKey;
+    if (preset) input.preset = preset;
     const data = await api("/api/providers", { method: "POST", body: JSON.stringify(input) });
     if (existing) Object.assign(existing, data.provider);
     else state.providers.push(data.provider);
@@ -1944,6 +2039,7 @@ function openWorkBuddyAccounts(provider) {
 /* ---------- personas ---------- */
 function renderPersonas() {
   const cards = state.personas
+    .filter((persona) => !persona.hidden)
     .map((persona) => {
       const provider = providerOf(persona.providerId);
       return `
