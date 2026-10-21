@@ -16,7 +16,12 @@ agent platform.
 
 ## 0.2.0 — Reliable daily driver
 
-Target: **2026-11-15**. Theme: fewer dead ends, clearer state, safer upgrades.
+Status: **implemented 2026-10-22**, ahead of the 2026-11-15 target. Theme: fewer
+dead ends, clearer state, safer upgrades.
+
+A manual smoke test on a real Windows install is still required before tagging;
+the acceptance criteria below are ticked when the code path exists, not when a
+build has been verified.
 
 ### P0 — must ship
 
@@ -70,18 +75,20 @@ Target: **2026-11-15**. Theme: fewer dead ends, clearer state, safer upgrades.
 
 ### Acceptance criteria
 
-- [ ] Switching WorkBuddy CN/Global and accounts works without restarting.
-- [ ] A 429/5xx during generation is retried once and produces exactly one
+- [x] Switching WorkBuddy CN/Global and accounts works without restarting.
+- [x] A 429/5xx during generation is retried once and produces exactly one
       user message and one assistant message.
-- [ ] Vision / context / reasoning settings survive a model refresh.
-- [ ] Conversation export → import round-trips messages, images, and persona
+- [x] Vision / context / reasoning settings survive a model refresh.
+- [x] Conversation export → import round-trips messages, images, and persona
       binding.
-- [ ] 1,000-message conversation opens without blocking the UI.
+- [ ] 1,000-message conversation opens without blocking the UI. *(needs message
+      virtualisation; not in this build)*
 - [ ] Dark theme passes basic contrast checks for text, bubbles, and buttons.
-- [ ] In-place installer upgrade keeps `data/` and the existing account
+      *(implemented, needs a visual pass)*
+- [x] In-place installer upgrade keeps `data/` and the existing account
       configuration.
 - [ ] `0.2.0` release contains `OwnChat-0.2.0-win64-setup.exe`; `0.2.1`
-      contains no installer.
+      contains no installer. *(release step)*
 
 ## Later milestones
 

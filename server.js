@@ -6,18 +6,29 @@ import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import {
   Store, DATA_DIR, PUBLIC_DIR, UPLOAD_DIR, AVATAR_DIR, uid, now,
-  decryptSecret, encryptSecret,
+  decryptSecret, encryptSecret, mergeModels,
 } from "./lib/store.js";
 import { WorkBuddyBridge, WorkBuddyError } from "./lib/workbuddy.js";
 import { WorkBuddyDownloader } from "./lib/downloads.js";
 import { chatOpenAI, fetchModels, testProvider, ProviderError } from "./lib/openai.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const APP_VERSION = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8")).version;
+// Strip a possible UTF-8 BOM: some Windows tooling still writes one, and
+// JSON.parse rejects it.
+const APP_VERSION = JSON.parse(
+  readFileSync(new URL("./package.json", import.meta.url), "utf8").replace(/^\uFEFF/, ""),
+).version;
 const STORE = new Store();
 const WORKBUDDY = new WorkBuddyBridge();
 const DOWNLOADER = new WorkBuddyDownloader();
-const SETTINGS = { host: "127.0.0.1", basePort: 17321, open: process.argv.includes("--open") };
+const SETTINGS = {
+  host: "127.0.0.1",
+  basePort: Number(process.env.OWNCHAT_PORT) || 17321,
+  open: process.argv.includes("--open"),
+};
+// Demo mode: skip the third-party integration entirely so screenshots and tests
+// never pick up a developer's real signed-in account.
+const DEMO = process.env.OWNCHAT_DEMO === "1";
 const MIME = {
   ".html": "text/html; charset=utf-8",
   ".css": "text/css; charset=utf-8",
@@ -132,8 +143,10 @@ function imageUrlFromMarkdown(markdown) {
   return images;
 }
 
-async function buildMessages(conversation, persona, history, maxChars) {
+async function buildMessages(conversation, persona, history, maxChars, caps = null) {
   const system = persona?.systemPrompt || "你是一个乐于助人的 AI 助手。请用中文回答。";
+  const tokenBudget = Number(caps?.contextWindow) > 0 ? Number(caps.contextWindow) : 0;
+  const budget = tokenBudget ? Math.min(maxChars, tokenBudget * 2) : maxChars;
   const mapped = [];
   for (const message of history) {
     if (!message || message.kind === "divider") continue;
@@ -165,11 +178,15 @@ async function buildMessages(conversation, persona, history, maxChars) {
     const length = typeof message.content === "string"
       ? message.content.length
       : JSON.stringify(message.content).length;
-    if (selected.length > 0 && used + length > maxChars) break;
+    if (selected.length > 0 && used + length > budget) break;
     selected.unshift(message);
     used += length;
   }
-  return [{ role: "system", content: system }, ...selected];
+  return {
+    messages: [{ role: "system", content: system }, ...selected],
+    dropped: mapped.length - selected.length,
+    used,
+  };
 }
 
 function findProvider(id) {
@@ -180,16 +197,86 @@ function modelInfo(provider, modelId) {
   return (provider?.models || []).find((m) => m.id === modelId) || null;
 }
 
+function modelCapabilities(provider, modelId) {
+  const info = modelInfo(provider, modelId) || {};
+  return {
+    vision: info.vision !== undefined ? Boolean(info.vision) : Boolean(provider?.supportsVision),
+    contextWindow: Number(info.contextWindow) || Number(provider?.contextWindow) || 128000,
+    maxOutput: Number(info.maxOutput || info.maxTokens) || Number(provider?.maxTokens) || 4096,
+    reasoningEffort: info.reasoningEffort || provider?.reasoningEffort || "",
+  };
+}
+
+function compareVersions(a, b) {
+  const pa = String(a || "0").replace(/^v/i, "").split(/[.+-]/).map((n) => Number.parseInt(n, 10) || 0);
+  const pb = String(b || "0").replace(/^v/i, "").split(/[.+-]/).map((n) => Number.parseInt(n, 10) || 0);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const left = pa[i] || 0;
+    const right = pb[i] || 0;
+    if (left !== right) return left > right ? 1 : -1;
+  }
+  return 0;
+}
+
+const UPDATE_CACHE = { at: 0, data: null };
+
+async function checkUpdate(force = false) {
+  const fresh = UPDATE_CACHE.data && Date.now() - UPDATE_CACHE.at < 6 * 60 * 60 * 1000;
+  if (!force && fresh) return UPDATE_CACHE.data;
+  const result = {
+    current: APP_VERSION,
+    latest: APP_VERSION,
+    hasUpdate: false,
+    url: "https://github.com/KovacBro/OwnChat/releases/latest",
+    notes: "",
+    publishedAt: "",
+    error: "",
+  };
+  try {
+    const response = await fetch("https://api.github.com/repos/KovacBro/OwnChat/releases/latest", {
+      headers: { Accept: "application/vnd.github+json", "User-Agent": `OwnChat/${APP_VERSION}` },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!response.ok) throw new Error(`GitHub 返回 ${response.status}`);
+    const release = await response.json();
+    const tag = String(release.tag_name || "").replace(/^v/i, "");
+    if (tag) {
+      result.latest = tag;
+      result.hasUpdate = compareVersions(tag, APP_VERSION) > 0;
+      result.url = release.html_url || result.url;
+      result.notes = String(release.body || "").slice(0, 4000);
+      result.publishedAt = release.published_at || "";
+    }
+  } catch (error) {
+    result.error = error instanceof Error ? error.message : String(error);
+  }
+  UPDATE_CACHE.at = Date.now();
+  UPDATE_CACHE.data = result;
+  return result;
+}
+
+function diagnosticId(code, status) {
+  return `EU-${String(code || "ERR").replace(/[^A-Z0-9_]/gi, "").slice(0, 12)}-${status || 0}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+}
+
+function isRetryable(error) {
+  if (!error) return false;
+  if (error.retryable !== undefined) return Boolean(error.retryable);
+  const status = Number(error.status) || 0;
+  return status === 0 || status === 429 || status >= 500;
+}
+
 function modelLabel(provider, modelId) {
   return modelInfo(provider, modelId)?.name || modelId;
 }
 
 async function saveProviderModels(providerId, models) {
   const provider = findProvider(providerId);
-  if (!provider) return;
-  provider.models = models;
+  if (!provider) return [];
+  provider.models = mergeModels(provider.models, models);
   provider.modelsFetchedAt = Date.now();
   await STORE.persist();
+  return provider.models;
 }
 
 function providerSupportsVision(provider, modelId) {
@@ -202,11 +289,18 @@ function providerSupportsVision(provider, modelId) {
   return Boolean(info?.vision || provider.supportsVision);
 }
 
+const DEMO_STATUS = {
+  available: false,
+  signedIn: false,
+  accounts: [],
+  error: "演示模式：未加载本地账号",
+  models: [],
+};
+
 async function enrichProviders() {
-  const statuses = {
-    cn: await WORKBUDDY.status("cn"),
-    global: await WORKBUDDY.status("global"),
-  };
+  const statuses = DEMO
+    ? { cn: { ...DEMO_STATUS, region: "cn" }, global: { ...DEMO_STATUS, region: "global" } }
+    : { cn: await WORKBUDDY.status("cn"), global: await WORKBUDDY.status("global") };
   const providers = STORE.providers().map((provider) => {
     if (provider.kind === "workbuddy") {
       const status = statuses[provider.region] || null;
@@ -225,12 +319,13 @@ async function bootstrap() {
   const { providers, statuses } = await enrichProviders();
   return {
     version: APP_VERSION,
+    demo: DEMO,
     settings: STORE.settings(),
     providers,
     personas: STORE.personas(),
     conversations: STORE.conversations(),
     workbuddy: statuses,
-    download: await DOWNLOADER.status(),
+    download: DEMO ? null : await DOWNLOADER.status(),
   };
 }
 
@@ -389,8 +484,8 @@ async function handleApi(req, res, url) {
     if (!provider) return sendJson(res, 404, { error: "Provider 不存在" });
     try {
       const result = await WORKBUDDY.models(region, Boolean(body.refresh));
-      await saveProviderModels(provider.id, result.models);
-      return sendJson(res, 200, { ...result, providerId: provider.id });
+      const models = await saveProviderModels(provider.id, result.models);
+      return sendJson(res, 200, { ...result, models, providerId: provider.id });
     } catch (error) {
       return sendJson(res, 400, { error: error instanceof Error ? error.message : String(error) });
     }
@@ -404,6 +499,34 @@ async function handleApi(req, res, url) {
     const body = await readJson(req);
     const conversation = await STORE.createConversation(body);
     return sendJson(res, 200, { conversation });
+  }
+
+  if (req.method === "GET" && pathname === "/api/search") {
+    const query = url.searchParams.get("q") || "";
+    const limit = Math.min(Math.max(Number(url.searchParams.get("limit")) || 60, 1), 200);
+    return sendJson(res, 200, { query, results: await STORE.searchMessages(query, limit) });
+  }
+
+  if (req.method === "POST" && pathname === "/api/conversations/bulk-delete") {
+    const body = await readJson(req);
+    const ids = Array.isArray(body.ids) ? body.ids.map(String) : [];
+    if (ids.length === 0) return sendJson(res, 400, { error: "没有选中会话" });
+    const removed = await STORE.deleteMany(ids);
+    return sendJson(res, 200, { removed, conversations: STORE.conversations() });
+  }
+
+  if (req.method === "POST" && pathname === "/api/import") {
+    try {
+      const body = await readJson(req);
+      const added = await STORE.importData(body);
+      return sendJson(res, 200, { added, conversations: STORE.conversations() });
+    } catch (error) {
+      return sendJson(res, 400, { error: error instanceof Error ? error.message : String(error) });
+    }
+  }
+
+  if (req.method === "GET" && pathname === "/api/update") {
+    return sendJson(res, 200, await checkUpdate(url.searchParams.has("force")));
   }
 
   const convMatch = /^\/api\/conversations\/([a-zA-Z0-9_-]+)$/.exec(pathname);
@@ -426,6 +549,13 @@ async function handleApi(req, res, url) {
     }
     const conversation = await STORE.updateConversation(id, body);
     return sendJson(res, 200, { conversation });
+  }
+
+  const convExport = /^\/api\/conversations\/([a-zA-Z0-9_-]+)\/export$/.exec(pathname);
+  if (convExport && req.method === "GET") {
+    const payload = await STORE.exportConversation(convExport[1]);
+    if (!payload) return sendJson(res, 404, { error: "会话不存在" });
+    return sendJson(res, 200, payload);
   }
 
   if (convMatch && req.method === "DELETE") {
@@ -471,8 +601,8 @@ async function handleApi(req, res, url) {
       if (!status.signedIn) return sendJson(res, 200, { ok: false, error: status.error || "未登录" });
       try {
         const result = await WORKBUDDY.models(provider.region, true);
-        await saveProviderModels(provider.id, result.models);
-        return sendJson(res, 200, { ok: true, models: result.models.length, sample: "凭据有效，模型列表已刷新" });
+        const models = await saveProviderModels(provider.id, result.models);
+        return sendJson(res, 200, { ok: true, models: models.length, sample: "凭据有效，模型列表已刷新" });
       } catch (error) {
         return sendJson(res, 200, { ok: false, error: error instanceof Error ? error.message : String(error) });
       }
@@ -487,15 +617,37 @@ async function handleApi(req, res, url) {
     try {
       if (provider.kind === "workbuddy") {
         const result = await WORKBUDDY.models(provider.region, true);
-        await saveProviderModels(provider.id, result.models);
-        return sendJson(res, 200, result);
+        const models = await saveProviderModels(provider.id, result.models);
+        return sendJson(res, 200, { ...result, models });
       }
-      const models = await fetchModels(provider);
-      await saveProviderModels(provider.id, models);
+      const fetched = await fetchModels(provider);
+      const models = await saveProviderModels(provider.id, fetched);
       return sendJson(res, 200, { models, source: "live" });
     } catch (error) {
       return sendJson(res, 400, { error: error instanceof Error ? error.message : String(error) });
     }
+  }
+
+  const capMatch = /^\/api\/providers\/([a-zA-Z0-9_-]+)\/capabilities$/.exec(pathname);
+  if (capMatch && req.method === "POST") {
+    const provider = findProvider(capMatch[1]);
+    if (!provider) return sendJson(res, 404, { error: "接口不存在" });
+    const body = await readJson(req);
+    const modelId = String(body.modelId || "").trim();
+    if (!modelId) return sendJson(res, 400, { error: "缺少 modelId" });
+    provider.models = Array.isArray(provider.models) ? provider.models : [];
+    let model = provider.models.find((m) => m.id === modelId);
+    if (!model) {
+      model = { id: modelId, name: modelId, vision: false, contextWindow: 128000, maxOutput: 4096 };
+      provider.models.push(model);
+    }
+    if (body.vision !== undefined) model.vision = Boolean(body.vision);
+    if (body.contextWindow !== undefined) model.contextWindow = Math.max(0, Number(body.contextWindow) || 0);
+    if (body.maxOutput !== undefined) model.maxOutput = Math.max(0, Number(body.maxOutput) || 0);
+    if (body.reasoningEffort !== undefined) model.reasoningEffort = String(body.reasoningEffort || "");
+    if (body.name !== undefined && String(body.name).trim()) model.name = String(body.name).trim().slice(0, 120);
+    await STORE.persist();
+    return sendJson(res, 200, { model });
   }
 
   if (req.method === "PATCH" && pathname === "/api/settings") {
@@ -581,6 +733,7 @@ async function handleChat(req, res) {
   const provider = findProvider(conversation.providerId);
   if (!provider) return sendJson(res, 400, { error: "模型接口不存在，请重新选择" });
   const persona = STORE.persona(conversation.personaId) || STORE.personas()[0];
+  const caps = modelCapabilities(provider, conversation.modelId);
 
   const messages = await STORE.messages(conversation.id);
   let userMessage;
@@ -605,7 +758,7 @@ async function handleChat(req, res) {
     const content = String(body.content || "").trim();
     const images = Array.isArray(body.images) ? body.images.filter((img) => img && img.url).slice(0, 4) : [];
     if (!content && images.length === 0) return sendJson(res, 400, { error: "消息为空" });
-    if (images.length > 0 && !providerSupportsVision(provider, conversation.modelId)) {
+    if (images.length > 0 && !caps.vision) {
       return sendJson(res, 400, {
         error: "当前模型未标记为支持图片。请切换支持视觉的模型，或在接口设置里打开“支持图片”。",
       });
@@ -661,9 +814,19 @@ async function handleChat(req, res) {
   let content = "";
   let reasoning = "";
   let usage = null;
+  let dropped = 0;
 
   try {
-    const apiMessages = await buildMessages(conversation, persona, history, STORE.settings().contextChars || 48000);
+    const built = await buildMessages(
+      conversation,
+      persona,
+      history,
+      STORE.settings().contextChars || 48000,
+      caps,
+    );
+    dropped = built.dropped;
+    if (dropped > 0) sse(res, "notice", { type: "trimmed", dropped, used: built.used });
+
     const handlers = {
       onDelta: (text) => {
         content += text;
@@ -679,29 +842,36 @@ async function handleChat(req, res) {
       },
     };
 
-    if (provider.kind === "workbuddy") {
-      await WORKBUDDY.chat(provider.region, {
-        model: conversation.modelId,
-        messages: apiMessages,
-        temperature: body.temperature ?? provider.temperature ?? 0.7,
-        maxTokens: Math.min(Number(body.maxTokens || provider.maxTokens || 4096), 128000),
-        signal: controller.signal,
-        ...handlers,
-      });
-    } else {
-      await chatOpenAI(provider, {
-        model: conversation.modelId,
-        messages: apiMessages,
-        temperature: body.temperature ?? provider.temperature ?? 0.7,
-        maxTokens: Number(body.maxTokens || provider.maxTokens || 4096),
-        signal: controller.signal,
-        ...handlers,
-      });
+    const request = {
+      model: conversation.modelId,
+      messages: built.messages,
+      temperature: body.temperature ?? provider.temperature ?? 0.7,
+      maxTokens: Math.min(Number(body.maxTokens || caps.maxOutput || provider.maxTokens || 4096), 128000),
+      reasoningEffort: caps.reasoningEffort,
+      signal: controller.signal,
+      ...handlers,
+    };
+
+    const run = () =>
+      provider.kind === "workbuddy"
+        ? WORKBUDDY.chat(provider.region, request)
+        : chatOpenAI(provider, request);
+
+    try {
+      await run();
+    } catch (error) {
+      const canRetry = !controller.signal.aborted && content === "" && reasoning === "" && isRetryable(error);
+      if (!canRetry) throw error;
+      log(`chat retry after ${error?.code || error?.name || "error"}: ${error?.message || error}`);
+      await new Promise((resolve) => setTimeout(resolve, 800));
+      if (controller.signal.aborted) throw error;
+      await run();
     }
 
     assistant.content = content;
     assistant.reasoning = reasoning;
     assistant.usage = usage;
+    assistant.truncated = dropped;
     assistant.status = controller.signal.aborted ? "stopped" : "complete";
     await STORE.replaceMessage(conversation.id, assistant);
 
@@ -726,8 +896,10 @@ async function handleChat(req, res) {
     assistant.content = content;
     assistant.reasoning = reasoning;
     assistant.usage = usage;
+    assistant.truncated = dropped;
     assistant.status = aborted ? "stopped" : "error";
     assistant.error = aborted ? "" : message;
+    assistant.diagnostic = aborted ? "" : diagnosticId(error?.code || "CHAT_ERROR", error?.status || 502);
     await STORE.replaceMessage(conversation.id, assistant);
     await STORE.updateConversation(conversation.id, {
       lastPreview: aborted ? "已停止生成" : `错误：${message}`.slice(0, 70),
@@ -738,6 +910,7 @@ async function handleChat(req, res) {
         code: error?.code || "CHAT_ERROR",
         status: error?.status || 502,
         message,
+        diagnostic: assistant.diagnostic,
       });
     }
     sse(res, "done", { message: assistant, aborted });
@@ -785,19 +958,21 @@ async function serveStatic(req, res, url) {
 async function main() {
   await STORE.init();
   await DOWNLOADER.init();
-  WORKBUDDY.init().then(async () => {
-    for (const region of ["cn", "global"]) {
-      const status = await WORKBUDDY.status(region).catch(() => null);
-      if (!status?.signedIn) continue;
-      try {
-        const result = await WORKBUDDY.models(region, true);
-        await saveProviderModels(region === "global" ? "workbuddy-global" : "workbuddy-cn", result.models);
-        log(`WorkBuddy ${region}: ${result.models.length} models`);
-      } catch (error) {
-        log(`WorkBuddy ${region} model refresh failed:`, error.message);
+  if (!DEMO) {
+    WORKBUDDY.init().then(async () => {
+      for (const region of ["cn", "global"]) {
+        const status = await WORKBUDDY.status(region).catch(() => null);
+        if (!status?.signedIn) continue;
+        try {
+          const result = await WORKBUDDY.models(region, true);
+          await saveProviderModels(region === "global" ? "workbuddy-global" : "workbuddy-cn", result.models);
+          log(`WorkBuddy ${region}: ${result.models.length} models`);
+        } catch (error) {
+          log(`WorkBuddy ${region} model refresh failed:`, error.message);
+        }
       }
-    }
-  });
+    });
+  }
 
   const server = http.createServer(async (req, res) => {
     try {

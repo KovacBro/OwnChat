@@ -22,6 +22,12 @@ const state = {
   loadingMessages: new Set(),
   streaming: {},
   search: "",
+  filter: "active",
+  searchResults: [],
+  searching: false,
+  searchTimer: null,
+  theme: "system",
+  update: null,
   attachments: [],
   emojiOpen: false,
   avatarStudio: null,
@@ -222,6 +228,15 @@ function formatDateTime(ts) {
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
+function formatUsage(usage) {
+  if (!usage || typeof usage !== "object") return "";
+  const prompt = Number(usage.prompt_tokens ?? usage.prompt ?? 0);
+  const completion = Number(usage.completion_tokens ?? usage.completion ?? 0);
+  if (!prompt && !completion) return "";
+  if (prompt && completion) return `↑${prompt} ↓${completion}`;
+  return `${Number(usage.total_tokens) || prompt + completion} tokens`;
+}
+
 function plainText(text) {
   return String(text || "")
     .replace(/```[\s\S]*?```/g, " [代码] ")
@@ -305,8 +320,14 @@ function closeEmoji() {
 
 /* ---------- boot ---------- */
 async function init() {
-  if (new URLSearchParams(location.search).has("app")) document.body.classList.add("in-app");
+  const params = new URLSearchParams(location.search);
+  if (params.has("app")) document.body.classList.add("in-app");
+  const initialView = params.get("view");
+  if (initialView && ["chat", "personas", "providers", "settings"].includes(initialView)) {
+    state.view = initialView;
+  }
   bindGlobal();
+  applyTheme();
   try {
     const boot = await api("/api/bootstrap");
     state.boot = boot;
@@ -320,8 +341,10 @@ async function init() {
       state.activeId = state.conversations[0].id;
       await loadMessages(state.activeId);
     }
+    applyTheme();
     renderAll();
     setTimeout(refreshWorkBuddyModels, 400);
+    setTimeout(() => checkForUpdates(false), 1800);
   } catch (error) {
     $("#main").innerHTML = `<div class="empty-chat"><div class="notice red">加载失败：${esc(error.message)}</div></div>`;
   }
@@ -346,8 +369,19 @@ function bindGlobal() {
   });
   $("#newChatBtn").addEventListener("click", openNewChat);
   $("#searchInput").addEventListener("input", (event) => {
-    state.search = event.target.value.trim().toLowerCase();
+    state.search = event.target.value.trim();
+    clearTimeout(state.searchTimer);
+    state.searchTimer = setTimeout(runSearch, 220);
     renderSidebar();
+  });
+  $$("#convTabs [data-filter]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.filter = button.dataset.filter;
+      state.search = "";
+      const input = $("#searchInput");
+      if (input) input.value = "";
+      renderSidebar();
+    });
   });
   $("#meBtn").addEventListener("click", openSettings);
   $("#aboutBtn").addEventListener("click", openAbout);
@@ -388,14 +422,19 @@ function renderRail() {
 
 function renderSidebar() {
   const root = $("#convList");
+  $$("#convTabs [data-filter]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.filter === state.filter);
+  });
+  if (state.search) return renderSearchResults();
+  const showArchived = state.filter === "archived";
   const filtered = state.conversations
-    .filter((c) => !state.search || c.title.toLowerCase().includes(state.search) || (c.lastPreview || "").toLowerCase().includes(state.search))
+    .filter((c) => (showArchived ? Boolean(c.archived) : !c.archived))
     .sort((a, b) => {
       if (Boolean(a.pinned) !== Boolean(b.pinned)) return a.pinned ? -1 : 1;
       return (b.updatedAt || 0) - (a.updatedAt || 0);
     });
   if (filtered.length === 0) {
-    root.innerHTML = `<div class="empty-list">${state.search ? "没有匹配的会话" : "还没有会话<br>点击右上角 ＋ 开始"}</div>`;
+    root.innerHTML = `<div class="empty-list">${showArchived ? "还没有归档的会话" : "还没有会话<br>点击右上角 ＋ 开始"}</div>`;
     return;
   }
   root.innerHTML = filtered
@@ -435,12 +474,16 @@ function renderSidebarFoot() {
   const root = $("#sidebarFoot");
   const cn = state.workbuddy?.cn;
   if (cn?.signedIn) {
-    root.innerHTML = `<i class="dot"></i><span>WorkBuddy · ${esc(cn.account?.name || "已登录")}</span><button data-detect-wb>刷新</button>`;
+    root.innerHTML = `<i class="dot"></i><span>${esc(cn.account?.name || "已登录")}${cn.account?.domain ? ` · ${esc(cn.account.domain)}` : ""}</span><button data-detect-wb>刷新</button>`;
     $("[data-detect-wb]", root).onclick = detectWorkBuddy;
-  } else {
-    root.innerHTML = `<i class="dot off"></i><span>WorkBuddy 未连接</span><button data-detect-wb>检测</button>`;
-    $("[data-detect-wb]", root).onclick = detectWorkBuddy;
+    return;
   }
+  const ready = state.providers.filter((provider) => provider.enabled !== false && providerReady(provider));
+  const label = ready.length
+    ? `${ready[0].name} · ${(ready[0].models || []).length} 个模型`
+    : "还没有可用接口";
+  root.innerHTML = `<i class="dot ${ready.length ? "" : "off"}"></i><span>${esc(label)}</span><button data-detect-wb>刷新</button>`;
+  $("[data-detect-wb]", root).onclick = detectWorkBuddy;
 }
 
 async function detectWorkBuddy() {
@@ -632,16 +675,25 @@ function renderMessage(message, isUser, persona, isStreaming, isLast) {
          <button data-copy-message="${message.id}"><svg><use href="#i-copy"/></svg>复制</button>
          ${isLast || error ? `<button data-retry-message="${message.id}"><svg><use href="#i-refresh"/></svg>重试</button>` : ""}
        </div>`;
+  const usageText = isUser || state.settings.showTokenUsage === false ? "" : formatUsage(message.usage);
   const errorText = error
-    ? `<div class="bubble error">${esc(message.error || "生成失败")}${message.content ? `<div style="margin-top:6px;color:#555;white-space:pre-wrap">${esc(message.content)}</div>` : ""}</div>`
+    ? `<div class="bubble error">${esc(message.error || "生成失败")}${
+        message.diagnostic
+          ? `<div class="diag"><button data-copy-diag="${esc(message.diagnostic)}" title="复制诊断码">${esc(message.diagnostic)}</button></div>`
+          : ""
+      }${message.content ? `<div style="margin-top:6px;color:#555;white-space:pre-wrap">${esc(message.content)}</div>` : ""}</div>`
     : `<div class="${bubbleClass}"><span class="bubble-content">${md(content)}</span>${images}${typing ? `<span class="typing"><i></i><i></i><i></i></span>` : ""}${isStreaming && content ? '<span class="cursor"></span>' : ""}${stopped ? `<div class="muted small" style="margin-top:4px">已停止生成</div>` : ""}</div>`;
+  const trimNote = Number(message.truncated) > 0
+    ? `<div class="trim-note">已省略较早的 ${Number(message.truncated)} 条消息（超出当前模型的上下文预算）</div>`
+    : "";
   return `
     <div class="message ${isUser ? "user" : "ai"}" data-message-id="${message.id}">
       ${avatarHTML(avatar, name, "avatar")}
       <div class="msg-body">
-        <div class="msg-meta">${esc(name)}${isUser ? "" : ` · ${esc(message.modelId || "")}`}</div>
+        <div class="msg-meta">${esc(name)}${isUser ? "" : ` · ${esc(message.modelId || "")}`}${usageText ? ` · <span class="usage">${esc(usageText)}</span>` : ""}</div>
         ${reasoning}
         ${errorText}
+        ${trimNote}
         ${actions}
       </div>
     </div>`;
@@ -721,6 +773,11 @@ function bindChatEvents(conversation, persona, provider) {
     }
     const retry = event.target.closest("[data-retry-message]");
     if (retry) return retryLast(conversation.id);
+    const diag = event.target.closest("[data-copy-diag]");
+    if (diag) {
+      await navigator.clipboard?.writeText(diag.dataset.copyDiag || "").catch(() => {});
+      toast("诊断码已复制", "ok");
+    }
   });
   resize();
 }
@@ -836,7 +893,12 @@ async function streamIntoConversation(conversation, { content, images, tempAssis
         runtime.reasoning += data.text || "";
         tempAssistant.reasoning = runtime.reasoning;
         patchStreamingBubble(conversation.id, tempAssistant, false);
+      } else if (event === "usage") {
+        tempAssistant.usage = data;
+      } else if (event === "notice") {
+        if (data?.type === "trimmed") tempAssistant.truncated = Number(data.dropped) || 0;
       } else if (event === "error") {
+        tempAssistant.diagnostic = data.diagnostic || "";
         throw new Error(data.message || "生成失败");
       } else if (event === "done") {
         finishStreaming(conversation.id, tempAssistant.id, data.message);
@@ -973,9 +1035,14 @@ async function retryLast(conversationId) {
       runtime.reasoning += data.text || "";
       tempAssistant.reasoning = runtime.reasoning;
       patchStreamingBubble(conversationId, tempAssistant);
+    } else if (event === "usage") {
+      tempAssistant.usage = data;
+    } else if (event === "notice") {
+      if (data?.type === "trimmed") tempAssistant.truncated = Number(data.dropped) || 0;
     } else if (event === "error") {
       tempAssistant.status = "error";
       tempAssistant.error = data.message;
+      tempAssistant.diagnostic = data.diagnostic || "";
       finishStreaming(conversationId, tempAssistant.id, tempAssistant, true);
     } else if (event === "done") {
       finishStreaming(conversationId, tempAssistant.id, data.message);
@@ -1031,12 +1098,22 @@ function openModelPicker() {
           <span class="tag ${providerReady(provider) ? "green" : "red"}" style="margin-left:6px">${providerReady(provider) ? "可用" : "未连接"}</span>
         </div>
         <div class="template-list">
-          ${models.map((model) => `
-            <button class="template" data-pick-model="${esc(model.id)}" data-pick-provider="${esc(provider.id)}" ${providerReady(provider) ? "" : "disabled"}>
-              <span class="t-icon" style="background:${provider.kind === "workbuddy" ? "#e8f7ef" : "#f0f0f3"};color:${provider.kind === "workbuddy" ? "#0d8051" : "#666"}">${esc(initialOf(model.name))}</span>
-              <span style="min-width:0"><strong>${esc(model.name)}</strong><span>${esc(model.id)}${model.vision ? " · 图片" : ""}${model.creditMultiplier ? ` · x${model.creditMultiplier}` : ""}</span></span>
-              ${conversation.modelId === model.id && conversation.providerId === provider.id ? `<span class="tag green" style="margin-left:auto">当前</span>` : ""}
-            </button>`).join("")}
+          ${models.map((model) => {
+            const caps = [
+              model.vision ? "图片" : "",
+              Number(model.contextWindow) >= 1000 ? `${Math.round(Number(model.contextWindow) / 1000)}K` : "",
+              model.reasoningEffort ? "推理" : "",
+            ].filter(Boolean);
+            return `
+            <div class="model-row">
+              <button class="template" data-pick-model="${esc(model.id)}" data-pick-provider="${esc(provider.id)}" ${providerReady(provider) ? "" : "disabled"}>
+                <span class="t-icon" style="background:${provider.kind === "workbuddy" ? "#e8f7ef" : "#f0f0f3"};color:${provider.kind === "workbuddy" ? "#0d8051" : "#666"}">${esc(initialOf(model.name))}</span>
+                <span style="min-width:0"><strong>${esc(model.name)}</strong><span>${esc(model.id)}${caps.length ? ` · ${esc(caps.join(" · "))}` : ""}${model.creditMultiplier ? ` · x${model.creditMultiplier}` : ""}</span></span>
+                ${conversation.modelId === model.id && conversation.providerId === provider.id ? `<span class="tag green" style="margin-left:auto">当前</span>` : ""}
+              </button>
+              <button class="icon-btn model-cfg" data-cfg-model="${esc(model.id)}" data-cfg-provider="${esc(provider.id)}" title="模型能力"><svg><use href="#i-gear"/></svg></button>
+            </div>`;
+          }).join("")}
         </div>`;
     })
     .join("");
@@ -1071,6 +1148,14 @@ function openModelPicker() {
           } catch (error) {
             toast(error.message, "err");
           }
+        };
+      });
+      $$("[data-cfg-model]", root).forEach((button) => {
+        button.onclick = (event) => {
+          event.stopPropagation();
+          const target = providerOf(button.dataset.cfgProvider);
+          const model = modelOf(target, button.dataset.cfgModel) || { id: button.dataset.cfgModel, name: button.dataset.cfgModel };
+          openModelCapabilities(target, model);
         };
       });
     },
@@ -1186,6 +1271,8 @@ function openConversationMenu(id) {
       </div>
       <div class="row" style="flex-wrap:wrap">
         <button class="btn" data-act-pin>${conversation.pinned ? "取消置顶" : "置顶会话"}</button>
+        <button class="btn" data-act-archive><svg><use href="#i-archive"/></svg>${conversation.archived ? "取消归档" : "归档"}</button>
+        <button class="btn" data-act-export><svg><use href="#i-download"/></svg>导出</button>
         <button class="btn danger" data-act-delete>删除会话</button>
       </div>`,
     foot: `<div class="spacer"></div><button class="btn" data-close>取消</button><button class="btn primary" data-act-save>保存名称</button>`,
@@ -1196,6 +1283,22 @@ function openConversationMenu(id) {
         conversation.pinned = !conversation.pinned;
         closeModal();
         renderSidebar();
+      };
+      $("[data-act-archive]", root).onclick = async () => {
+        const next = !conversation.archived;
+        try {
+          await api(`/api/conversations/${id}`, { method: "PATCH", body: JSON.stringify({ archived: next }) });
+          conversation.archived = next;
+          closeModal();
+          renderSidebar();
+          toast(next ? "已归档，可在「已归档」里找到" : "已取消归档", "ok");
+        } catch (error) {
+          toast(error.message, "err");
+        }
+      };
+      $("[data-act-export]", root).onclick = () => {
+        closeModal();
+        exportConversation(id);
       };
       $("[data-act-delete]", root).onclick = () => {
         openModal({
@@ -1465,14 +1568,18 @@ function renderProviders() {
       const status = provider.status;
       const ready = providerReady(provider);
       const dot = ready ? "on" : status && status.available ? "err" : "";
+      const expiry = status?.account?.expiresAtMs ? new Date(status.account.expiresAtMs) : null;
+      const expiryText = expiry
+        ? `${expiry.getMonth() + 1}/${expiry.getDate()} ${String(expiry.getHours()).padStart(2, "0")}:${String(expiry.getMinutes()).padStart(2, "0")}`
+        : "";
       const sub = isWB
-        ? `${providerStatusText(provider)} · ${(provider.models || []).length} 个模型`
+        ? `${provider.region === "global" ? "国际" : "国内"} · ${providerStatusText(provider)}${expiryText ? ` · Token 至 ${expiryText}` : ""} · ${(provider.models || []).length} 个模型`
         : `${provider.baseUrl || "未填写地址"} · ${(provider.models || []).length} 个模型`;
       return `
         <div class="card provider-card" data-provider-card="${provider.id}">
           <div class="p-icon" style="${isWB ? "background:#e8f7ef;color:#0d8051" : ""}"><svg><use href="${isWB ? "#i-server" : "#i-plug"}"/></svg></div>
           <div class="p-main">
-            <div class="p-name"><i class="status-dot ${dot}"></i>${esc(provider.name)} ${isWB ? `<span class="tag green">本地</span>` : ""} ${provider.hasKey ? `<span class="tag">Key 已存</span>` : ""}</div>
+            <div class="p-name"><i class="status-dot ${dot}"></i>${esc(provider.name)} ${isWB ? `<span class="tag green">${provider.region === "global" ? "国际" : "国内"}</span>` : ""} ${provider.hasKey ? `<span class="tag">Key 已存</span>` : ""}</div>
             <div class="p-sub">${esc(sub)}</div>
           </div>
           <div class="p-actions">
@@ -1486,26 +1593,29 @@ function renderProviders() {
         <div class="test-result ${state.testResults?.[provider.id]?.ok ? "ok" : state.testResults?.[provider.id] ? "bad" : ""}" id="test-${provider.id}" style="${state.testResults?.[provider.id] ? "" : "display:none"}">${esc(state.testResults?.[provider.id]?.text || "")}</div>`;
     })
     .join("");
+  const demo = Boolean(state.boot?.demo);
   $("#main").innerHTML = `
     <div class="page">
       <div class="page-head">
-        <div><h1>API 接口</h1><p>WorkBuddy 本地直连；也可以接任意 OpenAI 兼容服务。</p></div>
+        <div><h1>API 接口</h1><p>接任意 OpenAI 兼容服务；本机模型也可以。</p></div>
         <div class="page-actions">
-          <button class="btn" data-wb-detect><svg><use href="#i-refresh"/></svg>检测 WorkBuddy</button>
+          <button class="btn" data-wb-detect><svg><use href="#i-refresh"/></svg>刷新状态</button>
           <button class="btn primary" data-add-provider><svg><use href="#i-plus"/></svg>添加接口</button>
         </div>
       </div>
-      ${renderDownloadCard()}
+      ${demo ? "" : renderDownloadCard()}
       ${cards || `<div class="empty-list" style="margin-top:9px">还没有接口</div>`}
-      <div class="notice" style="margin-top:14px">
+      ${demo ? "" : `<div class="notice" style="margin-top:14px">
         WorkBuddy 通过本机已安装的 <b>dsh-connect-workbuddy</b> 读取登录态，不复制、不上传你的账号凭据。
         免费 API 的额度与模型会变化，以各平台控制台为准；OwnChat 不内置任何 Key。
-      </div>
+      </div>`}
     </div>`;
   $("[data-add-provider]").onclick = openAddProvider;
   $("[data-wb-detect]").onclick = detectWorkBuddy;
-  bindDownloadUI();
-  refreshDownloadStatus().then(scheduleDownloadPoll);
+  if (!demo) {
+    bindDownloadUI();
+    refreshDownloadStatus().then(scheduleDownloadPoll);
+  }
   $$("[data-wb-accounts]").forEach((button) => {
     button.onclick = () => openWorkBuddyAccounts(providerOf(button.dataset.wbAccounts));
   });
@@ -2201,6 +2311,12 @@ function renderSettings() {
             <option value="ctrl" ${s.sendKey === "ctrl" ? "selected" : ""}>Ctrl+Enter 发送，Enter 换行</option>
           </select></div>
           <div class="field"><label>上下文预算（字符）</label><input id="set-ctx" type="number" value="${esc(s.contextChars || 48000)}"></div>
+          <div class="field"><label>外观</label><select id="set-theme">
+            <option value="system" ${(s.theme || "system") === "system" ? "selected" : ""}>跟随系统</option>
+            <option value="light" ${s.theme === "light" ? "selected" : ""}>浅色</option>
+            <option value="dark" ${s.theme === "dark" ? "selected" : ""}>深色</option>
+          </select></div>
+          <div class="field"><label class="check"><input type="checkbox" id="set-usage" ${s.showTokenUsage !== false ? "checked" : ""}> 显示 token 用量</label></div>
         </div>
         <div class="form-actions"><button class="btn primary" id="save-settings">保存设置</button></div>
       </div>
@@ -2225,22 +2341,34 @@ function renderSettings() {
         <div class="form-section-title">数据</div>
         <div class="row" style="flex-wrap:wrap">
           <button class="btn" id="export-data"><svg><use href="#i-download"/></svg>导出 JSON（不含 Key）</button>
+          <button class="btn" id="import-data"><svg><use href="#i-upload"/></svg>导入 JSON</button>
+          <button class="btn" id="bulk-delete"><svg><use href="#i-trash"/></svg>批量删除会话</button>
           <button class="btn" id="open-data">打开数据目录</button>
         </div>
-        <div class="hint" style="margin-top:8px">API Key 使用本机随机密钥 AES-256-GCM 加密；服务只监听 127.0.0.1。</div>
+        <div class="hint" style="margin-top:8px">API Key 使用本机随机密钥 AES-256-GCM 加密；服务只监听 127.0.0.1。导入的会话不会覆盖已有会话。</div>
       </div>
 
       <div class="card" style="margin-top:10px">
         <div class="form-section-title">关于</div>
-        <div class="row" style="justify-content:space-between"><span class="muted small">OwnChat ${esc(state.boot?.version || "0.1.0")} · 本地多模型聊天</span><button class="btn small" id="about-link">说明</button></div>
+        <div class="row" style="justify-content:space-between">
+          <span class="muted small">OwnChat ${esc(state.boot?.version || "0.2.0")} · 本地多模型聊天</span>
+          <span class="row">
+            <button class="btn small" id="check-update"><svg><use href="#i-refresh"/></svg>检查更新</button>
+            <button class="btn small" id="about-link">说明</button>
+          </span>
+        </div>
+        <div class="test-result" id="updateBox" style="display:none"></div>
       </div>
     </div>`;
   $("#save-settings").onclick = saveSettings;
   $("#save-image-settings").onclick = saveImageSettings;
   $("#set-avatar").onclick = () => openUserAvatarStudio();
   $("#export-data").onclick = exportData;
+  $("#import-data").onclick = importWorkspace;
+  $("#bulk-delete").onclick = openBulkDelete;
   $("#open-data").onclick = () => toast("数据目录：E:\\OwnChat\\data");
   $("#about-link").onclick = openAbout;
+  $("#check-update").onclick = () => checkForUpdates(true);
 }
 
 async function saveSettings() {
@@ -2251,9 +2379,12 @@ async function saveSettings() {
         userName: $("#set-name").value.trim() || "我",
         sendKey: $("#set-send").value,
         contextChars: Number($("#set-ctx").value) || 48000,
+        theme: $("#set-theme").value,
+        showTokenUsage: $("#set-usage").checked,
       }),
     });
     state.settings = data.settings;
+    applyTheme();
     toast("设置已保存", "ok");
     renderRail();
   } catch (error) {
@@ -2310,15 +2441,278 @@ function openAbout() {
     title: "关于 OwnChat",
     body: `
       <div class="confirm-text" style="line-height:1.8">
-        <b>OwnChat ${esc(state.boot?.version || "0.1.0")}</b><br>
-        本地优先的多模型聊天应用。每个会话独立绑定接口与模型，背后是真实的大模型。<br><br>
-        <b>WorkBuddy 接入</b>：复用本机 <code>dsh-connect-workbuddy</code> 的凭据读取、Token 刷新、模型目录与上游协议；不复制、不上传账号凭据。<br><br>
+        <b>OwnChat ${esc(state.boot?.version || "0.2.0")}</b><br>
+        本地优先的多模型聊天应用。每个会话独立绑定接口、模型与人格，背后是真实的大模型。<br><br>
+        <b>数据</b>：所有会话、配置、头像都保存在本机 <code>data</code> 目录；API Key 使用 AES-256-GCM 加密，服务只监听 <code>127.0.0.1</code>，不注册、不埋点、不上云。<br><br>
+        <b>许可</b>：AGPL-3.0-or-later。0.1.0 及更早版本以 MIT 发布，该授权对这些版本继续有效。<br><br>
         <b>提示</b>：免费 API 的额度与模型随时可能变化；头像生成默认使用 Pollinations，可能限流或带水印。
       </div>`,
     foot: `<div class="spacer"></div><button class="btn primary" data-close>知道了</button>`,
     onMount: (root) => {
       $("[data-close]", root).onclick = closeModal;
     },
+  });
+}
+
+/* ---------- theme ---------- */
+function applyTheme() {
+  const mode = state.settings?.theme || "system";
+  const prefersDark = (() => {
+    try {
+      return Boolean(window.matchMedia?.("(prefers-color-scheme: dark)").matches);
+    } catch {
+      return false;
+    }
+  })();
+  const dark = mode === "dark" || (mode === "system" && prefersDark);
+  document.documentElement.dataset.theme = dark ? "dark" : "light";
+  document.documentElement.style.colorScheme = dark ? "dark" : "light";
+  try {
+    localStorage.setItem("ownchat.theme", mode);
+  } catch {}
+}
+
+try {
+  const media = window.matchMedia?.("(prefers-color-scheme: dark)");
+  media?.addEventListener?.("change", () => {
+    if ((state.settings?.theme || "system") === "system") applyTheme();
+  });
+} catch {}
+
+/* ---------- update check ---------- */
+async function checkForUpdates(manual = false) {
+  if (!manual && !state.boot) return null;
+  const box = $("#updateBox");
+  if (manual && box) {
+    box.style.display = "";
+    box.className = "test-result";
+    box.textContent = "正在检查 GitHub Releases…";
+  }
+  try {
+    const data = await api(`/api/update${manual ? "?force=1" : ""}`);
+    state.update = data;
+    if (box && state.view === "settings") {
+      box.style.display = "";
+      if (data.error) {
+        box.className = "test-result bad";
+        box.textContent = `检查失败：${data.error}（离线时属正常）`;
+      } else if (data.hasUpdate) {
+        box.className = "test-result ok";
+        box.innerHTML = `有新版本 <b>${esc(data.latest)}</b>（当前 ${esc(data.current)}）<br><a href="${esc(data.url)}" target="_blank" rel="noopener noreferrer">打开发布页</a>`;
+      } else {
+        box.className = "test-result ok";
+        box.textContent = `已是最新版本（${data.current}）`;
+      }
+    }
+    if (!manual && data.hasUpdate) toast(`有新版本 ${data.latest}，可在设置里查看`, "ok");
+    return data;
+  } catch (error) {
+    if (box) {
+      box.style.display = "";
+      box.className = "test-result bad";
+      box.textContent = `检查失败：${error.message}`;
+    }
+    if (manual) toast(error.message, "err");
+    return null;
+  }
+}
+
+/* ---------- conversation export / import ---------- */
+async function exportConversation(id) {
+  try {
+    const data = await api(`/api/conversations/${id}/export`);
+    const conversation = convOf(id);
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `ownchat-${(conversation?.title || "conversation").replace(/[^\w\u4e00-\u9fa5-]+/g, "-").slice(0, 40)}.json`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    toast("会话已导出", "ok");
+  } catch (error) {
+    toast(`导出失败：${error.message}`, "err");
+  }
+}
+
+function importWorkspace() {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = "application/json,.json";
+  input.onchange = async () => {
+    const file = input.files?.[0];
+    if (!file) return;
+    try {
+      const payload = JSON.parse(await file.text());
+      const data = await api("/api/import", { method: "POST", body: JSON.stringify(payload) });
+      state.conversations = data.conversations || state.conversations;
+      for (const conversation of state.conversations) delete state.messages[conversation.id];
+      if (state.activeId) await loadMessages(state.activeId);
+      renderAll();
+      toast(`已导入 ${data.added} 个会话`, "ok");
+    } catch (error) {
+      toast(`导入失败：${error.message}`, "err");
+    }
+  };
+  input.click();
+}
+
+function openBulkDelete() {
+  const rows = state.conversations
+    .slice()
+    .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
+    .map((c) => `
+      <label class="check bulk-row">
+        <input type="checkbox" data-bulk-id="${c.id}">
+        <span class="bulk-title">${esc(c.title || "新对话")}${c.archived ? ' <span class="tag">已归档</span>' : ""}</span>
+        <span class="muted small">${esc(formatTime(c.updatedAt))}</span>
+      </label>`)
+    .join("");
+  openModal({
+    title: "批量删除会话",
+    sub: `共 ${state.conversations.length} 个会话；删除后无法恢复`,
+    body: `<div class="bulk-list">${rows || '<div class="empty-list">没有会话</div>'}</div>`,
+    foot: `<div class="spacer"></div><button class="btn" data-close>取消</button><button class="btn danger" data-confirm disabled>删除选中</button>`,
+    onMount: (root) => {
+      const confirm = $("[data-confirm]", root);
+      const refresh = () => {
+        const picked = $$("[data-bulk-id]:checked", root).length;
+        confirm.disabled = picked === 0;
+        confirm.textContent = picked ? `删除 ${picked} 个会话` : "删除选中";
+      };
+      $$("[data-bulk-id]", root).forEach((box) => box.addEventListener("change", refresh));
+      $("[data-close]", root).onclick = closeModal;
+      confirm.onclick = async () => {
+        const ids = $$("[data-bulk-id]:checked", root).map((box) => box.dataset.bulkId);
+        if (!ids.length) return;
+        try {
+          const data = await api("/api/conversations/bulk-delete", {
+            method: "POST",
+            body: JSON.stringify({ ids }),
+          });
+          state.conversations = data.conversations || state.conversations.filter((c) => !ids.includes(c.id));
+          for (const id of ids) delete state.messages[id];
+          if (!state.conversations.some((c) => c.id === state.activeId)) {
+            state.activeId = state.conversations[0]?.id || null;
+          }
+          closeModal();
+          renderAll();
+          toast(`已删除 ${data.removed} 个会话`, "ok");
+        } catch (error) {
+          toast(error.message, "err");
+        }
+      };
+    },
+  });
+}
+
+/* ---------- model capabilities ---------- */
+function openModelCapabilities(provider, model) {
+  if (!provider) return;
+  const caps = {
+    vision: Boolean(model.vision),
+    contextWindow: Number(model.contextWindow) || 128000,
+    maxOutput: Number(model.maxOutput || model.maxTokens) || 4096,
+    reasoningEffort: model.reasoningEffort || "",
+  };
+  openModal({
+    title: `${model.name || model.id} · 能力`,
+    sub: `${provider.name} · ${model.id}`,
+    narrow: true,
+    body: `
+      <div class="form-grid">
+        <div class="field full"><label class="check"><input type="checkbox" id="cap-vision" ${caps.vision ? "checked" : ""}> 支持图片输入</label></div>
+        <div class="field"><label>上下文窗口（tokens）</label><input id="cap-context" type="number" value="${caps.contextWindow}"></div>
+        <div class="field"><label>最大输出（tokens）</label><input id="cap-max" type="number" value="${caps.maxOutput}"></div>
+        <div class="field full"><label>推理强度</label><select id="cap-effort">
+          <option value="" ${caps.reasoningEffort ? "" : "selected"}>不发送</option>
+          <option value="low" ${caps.reasoningEffort === "low" ? "selected" : ""}>low</option>
+          <option value="medium" ${caps.reasoningEffort === "medium" ? "selected" : ""}>medium</option>
+          <option value="high" ${caps.reasoningEffort === "high" ? "selected" : ""}>high</option>
+        </select><div class="hint">会透传到请求的 reasoning_effort 字段；上游不支持时会报错，改回「不发送」即可。</div></div>
+      </div>`,
+    foot: `<div class="spacer"></div><button class="btn" data-close>取消</button><button class="btn primary" data-save-cap>保存</button>`,
+    onMount: (root) => {
+      $("[data-close]", root).onclick = closeModal;
+      $("[data-save-cap]", root).onclick = async () => {
+        try {
+          const data = await api(`/api/providers/${provider.id}/capabilities`, {
+            method: "POST",
+            body: JSON.stringify({
+              modelId: model.id,
+              vision: $("#cap-vision", root).checked,
+              contextWindow: Number($("#cap-context", root).value) || 0,
+              maxOutput: Number($("#cap-max", root).value) || 0,
+              reasoningEffort: $("#cap-effort", root).value,
+            }),
+          });
+          Object.assign(model, data.model);
+          closeModal();
+          toast("模型能力已保存", "ok");
+        } catch (error) {
+          toast(error.message, "err");
+        }
+      };
+    },
+  });
+}
+
+/* ---------- full-text search ---------- */
+async function runSearch() {
+  const query = state.search;
+  if (!query) {
+    state.searchResults = [];
+    state.searching = false;
+    renderSidebar();
+    return;
+  }
+  state.searching = true;
+  renderSidebar();
+  try {
+    const data = await api(`/api/search?q=${encodeURIComponent(query)}&limit=80`);
+    if (state.search !== query) return;
+    state.searchResults = data.results || [];
+  } catch (error) {
+    state.searchResults = [];
+    toast(`搜索失败：${error.message}`, "err");
+  } finally {
+    if (state.search === query) {
+      state.searching = false;
+      renderSidebar();
+    }
+  }
+}
+
+function renderSearchResults() {
+  const root = $("#convList");
+  if (state.searching && state.searchResults.length === 0) {
+    root.innerHTML = `<div class="empty-list">搜索中…</div>`;
+    return;
+  }
+  if (state.searchResults.length === 0) {
+    root.innerHTML = `<div class="empty-list">没有匹配的消息</div>`;
+    return;
+  }
+  root.innerHTML = state.searchResults
+    .map((hit) => `
+      <div class="conv hit" data-hit-conv="${esc(hit.conversationId)}">
+        <div class="conv-main">
+          <div class="conv-top">
+            <span class="conv-name">${esc(hit.conversationTitle || "新对话")}</span>
+            <span class="conv-time">${esc(formatTime(hit.createdAt))}</span>
+          </div>
+          <div class="preview"><span class="preview-text">${esc(hit.snippet)}</span></div>
+        </div>
+      </div>`)
+    .join("");
+  $$("[data-hit-conv]", root).forEach((el) => {
+    el.addEventListener("click", async () => {
+      const id = el.dataset.hitConv;
+      state.search = "";
+      state.searchResults = [];
+      const input = $("#searchInput");
+      if (input) input.value = "";
+      await selectConversation(id);
+    });
   });
 }
 

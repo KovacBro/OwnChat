@@ -1,34 +1,64 @@
 <p align="center">
-  <img src="docs/assets/app-preview.png" alt="OwnChat" width="920">
+  <img src="docs/assets/app-preview.png" alt="OwnChat screenshot" width="920">
 </p>
 
 <h1 align="center">OwnChat</h1>
 
 <p align="center">
-  <b>本地优先、多模型、多聊天窗的 Windows 桌面 AI 聊天客户端。</b><br>
-  每个聊天窗独立绑定接口、模型与人格；整体布局参考 WorkBuddy，聊天体验参考微信。
+  <b>One window for every model. Local-first, no account, no telemetry.</b><br>
+  Each conversation keeps its own provider, model and persona.
 </p>
 
 <p align="center">
-  <a href="https://github.com/KovacBro/OwnChat/releases/latest"><img src="https://img.shields.io/github/v/release/KovacBro/OwnChat?label=release&style=flat-square" alt="release"></a>
-  <img src="https://img.shields.io/badge/platform-Windows%2010%2F11%20x64-0078D4?style=flat-square" alt="platform">
-  <img src="https://img.shields.io/badge/node-%3E%3D22-339933?style=flat-square" alt="node">
-  <a href="LICENSE"><img src="https://img.shields.io/github/license/KovacBro/OwnChat?style=flat-square" alt="license"></a>
+  <a href="https://github.com/KovacBro/OwnChat/releases/latest"><img src="https://img.shields.io/github/v/release/KovacBro/OwnChat?label=download&style=for-the-badge&color=15AC70" alt="Download"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-15AC70?style=for-the-badge" alt="License"></a>
+  <img src="https://img.shields.io/badge/platform-Windows%2010%2F11%20x64-0078D4?style=for-the-badge" alt="Platform">
+  <img src="https://img.shields.io/badge/node-%3E%3D22-339933?style=for-the-badge" alt="Node">
+</p>
+
+<p align="center">
+  <a href="README.zh-CN.md">中文说明</a> ·
+  <a href="#install">Install</a> ·
+  <a href="#bring-your-own-model">Providers</a> ·
+  <a href="#faq">FAQ</a> ·
+  <a href="ROADMAP.md">Roadmap</a>
 </p>
 
 ---
 
-## Highlights
+## What it is
 
-- **Three-column desktop UI** — icon rail, conversation list, and chat area, designed for Edge `--app` windows.
-- **One model per conversation** — each chat stores its own `Provider + Model + Persona`; switching does not disturb other conversations.
-- **Real WorkBuddy integration** — reuses the local `dsh-connect-workbuddy` credential store, token refresh, model catalog, and upstream SSE protocol. No 8787 gateway.
-- **Bring your own models** — OpenAI-compatible and Azure OpenAI endpoints, with presets for OpenRouter, Gemini, Groq, SiliconFlow, Zhipu, ModelScope, Mistral, Cerebras, GitHub Models, and Ollama.
-- **Real streaming chat** — stream, stop, retry, copy, collapsible reasoning, Markdown code blocks, and clear provider errors.
-- **Text, Emoji, and images** — up to four images per message, compressed locally; vision capability is checked before sending.
-- **Personas and avatars** — DeepSeek娘, GLM娘, Hy3娘, plus a generic persona. Avatar Studio supports preset prompts, custom prompts, uploads, and optional image APIs.
-- **WorkBuddy download center** — official Windows installer, pause/resume, SHA-256, and Authenticode verification.
-- **Local-first** — no cloud account, no telemetry, API keys encrypted with AES-256-GCM, server bound to `127.0.0.1`.
+OwnChat is a Windows desktop chat client for people who already use more than one
+AI model. Open a conversation, pin it to a provider, model and persona — and
+switch models a hundred times without losing a single message.
+
+It runs entirely on your machine: a small local server on `127.0.0.1`, your API
+keys encrypted at rest, and no cloud account of any kind.
+
+## Why people use it
+
+**One window, every model.** OpenRouter, Gemini, Groq, SiliconFlow, Zhipu,
+ModelScope, Mistral, Cerebras, GitHub Models, Azure OpenAI, a local Ollama — or
+any OpenAI-compatible endpoint. Each conversation remembers its own
+`provider + model + persona`, so a coding chat and a translation chat never
+interfere.
+
+**Genuinely local.** No telemetry, no analytics, no sign-in. Keys are encrypted
+with AES-256-GCM and never returned to the browser. The HTTP server binds to
+`127.0.0.1` only.
+
+**Light on the machine.** No bundled Electron runtime — OwnChat uses the Edge
+engine already installed on Windows and opens as a frameless app window. The
+whole thing is plain Node and vanilla JS, with zero npm dependencies.
+
+**Yours to audit.** AGPL-3.0. Read the proxy, read the storage layer, fork it if
+you disagree with a design decision.
+
+## Status
+
+`0.2.x` is an early release. The data format may still change before `1.0.0`;
+export your workspace before upgrading across minor versions. Windows only for
+now. The installer is not code-signed yet — see [FAQ](#faq).
 
 ## Install
 
@@ -36,14 +66,15 @@
 
 1. Open **[Releases](https://github.com/KovacBro/OwnChat/releases/latest)**.
 2. Download `OwnChat-<version>-win64-setup.exe`.
-3. Run it. The installer is per-user (`%LOCALAPPDATA%\Programs\OwnChat`) and does not need admin rights.
-4. Launch **OwnChat** from the Start Menu or desktop shortcut.
+3. Run it. Per-user install into `%LOCALAPPDATA%\Programs\OwnChat`; no admin
+   rights needed.
+4. Launch **OwnChat** from the Start Menu.
 
-The installer bundles Node.js; you do not need a separate Node installation.
+The installer bundles Node.js — you do not need a separate Node installation.
 
 ### Portable ZIP
 
-Download `OwnChat-<version>-win64-portable.zip`, extract it, and run `start.bat`
+Download `OwnChat-<version>-win64-portable.zip`, extract, run `start.bat`
 (or `start.vbs` for a hidden launcher).
 
 ### From source
@@ -54,44 +85,13 @@ cd OwnChat
 node server.js
 ```
 
-Requires Node.js 22+ and Microsoft Edge. `start.bat` starts the server and
-opens the Edge app window.
+Requires Node.js 22+ and Microsoft Edge. `start.bat` starts the server and opens
+the Edge app window.
 
-> The OwnChat installer is not code-signed yet. Windows SmartScreen may show
-> “Unknown publisher”. Verify `SHA256SUMS.txt` from the release assets.
+## Bring your own model
 
-## WorkBuddy
-
-OwnChat does **not** reimplement WorkBuddy login. It reuses the local
-[`dsh-connect-workbuddy`](https://github.com/dingminhua/dsh-connect-workbuddy)
-plugin already installed in the DSH desktop profile:
-
-- reads the plugin's local CN / Global credential vault;
-- reuses its token refresh;
-- reads the same `/v3/config` model catalog;
-- speaks the same upstream `/v2/chat/completions` protocol.
-
-Requirements:
-
-- WorkBuddy desktop app installed and signed in;
-- `dsh-connect-workbuddy` installed in the DSH desktop profile.
-
-If the plugin is missing, OwnChat still runs with free or custom providers.
-The **API 接口** page shows the WorkBuddy connection status and account.
-
-## Providers
-
-The **API 接口** page supports:
-
-- OpenAI Chat Completions
-- Azure OpenAI
-- Custom Base URL, API Key, model, organization, API version, deployment
-- Context window, max output, temperature, Top P
-- Custom request headers and body
-- Timeout, enabled toggle, vision toggle
-- Test connection and model discovery
-
-Built-in presets:
+OwnChat ships with no keys and no quota. You point it at a provider you already
+pay for, or at a free tier you registered yourself.
 
 | Provider | Base URL | Key |
 |---|---|---|
@@ -104,87 +104,17 @@ Built-in presets:
 | Mistral | `https://api.mistral.ai/v1` | Required |
 | Cerebras | `https://api.cerebras.ai/v1` | Required |
 | GitHub Models | `https://models.github.ai/inference` | GitHub token |
-| Ollama | `http://127.0.0.1:11434/v1` | None |
+| Ollama (local) | `http://127.0.0.1:11434/v1` | None |
+| Custom / Azure | any OpenAI-compatible URL | Optional |
 
-Free tiers and model IDs change; check each provider's console. OwnChat does
-not bundle any API keys.
+Every provider card exposes the full request surface when you need it: context
+window, max output, temperature, Top P, custom headers and body, timeout, vision
+capability, test-connection and model discovery.
 
-## WorkBuddy download center
+Free tiers and model IDs change constantly. OwnChat does not bundle any keys and
+does not promise unlimited free usage.
 
-The **API 接口** page includes a **WorkBuddy 客户端** card:
-
-- official Windows x64 installer, version 5.8.3, about 421 MB;
-- downloads to `downloads/WorkBuddy/` under the app directory;
-- pause / resume / progress / speed / ETA;
-- SHA-256 and Windows Authenticode signature verification;
-- open folder, run installer, or open the official download page.
-
-![WorkBuddy download card](docs/assets/download-preview.png)
-
-## Versioning and releases
-
-OwnChat follows SemVer.
-
-- **Only `MAJOR.MINOR.0` receives installer assets** — `0.1.0`, `0.2.0`, …, `1.0.0`.
-- Patch releases (`0.2.1`, …) are source-only tags. They do not receive installers.
-- Old releases are never deleted or overwritten.
-- Every minor release is published on GitHub Releases; the repository sidebar points to the latest minor.
-
-See [CHANGELOG.md](CHANGELOG.md) for released versions and
-[docs/RELEASING.md](docs/RELEASING.md) for the release checklist.
-
-## Roadmap
-
-- [0.2.0 — Reliable daily driver](ROADMAP.md)
-- [0.2.0 milestone and issues](https://github.com/KovacBro/OwnChat/milestone/1)
-- Later: attachments, workflows, parallel generation, stable 1.0.
-
-0.2.0 focuses on WorkBuddy account/region UX, per-model capabilities,
-retry/error reliability, conversation search/export, dark theme, and
-data-preserving installer upgrades.
-
-Voice is **not** in the roadmap.
-
-## Architecture
-
-```text
-server.js                 local HTTP server, API proxy, SSE
-lib/store.js              JSON storage, AES-GCM, seed data
-lib/workbuddy.js          dsh-connect-workbuddy adapter
-lib/openai.js             generic OpenAI-compatible provider
-lib/downloads.js          WorkBuddy downloader + signature check
-public/index.html         three-column UI shell
-public/styles.css         visual system
-public/app.js             chat, streaming, personas, avatar studio
-installer/OwnChat.iss     Inno Setup installer
-```
-
-The server binds to `127.0.0.1` only. The renderer talks to local `/api/*`
-routes; provider keys never reach the browser. Data is stored under `data/`;
-downloaded installers live under `downloads/`.
-
-## Development
-
-```powershell
-node server.js          # http://127.0.0.1:17321
-npm start               # same, and opens an Edge app window
-```
-
-No npm dependencies; Node built-ins only.
-
-Build release assets:
-
-```powershell
-powershell -File installer/build-release.ps1 -Version 0.1.0
-```
-
-Outputs to `dist/`:
-
-- `OwnChat-<version>-win64-setup.exe`
-- `OwnChat-<version>-win64-portable.zip`
-- `SHA256SUMS.txt`
-
-## Data and security
+## Privacy
 
 ```text
 data/
@@ -194,28 +124,107 @@ data/
   avatars/                 generated / uploaded avatars
   .master-key              per-install AES-256-GCM key
   edge-profile/            Edge app profile
-downloads/WorkBuddy/       downloaded WorkBuddy installer + meta.json
 ```
 
-- API keys are encrypted at rest; the frontend only receives `hasKey`.
+- API keys are encrypted at rest; the frontend only ever receives `hasKey`.
 - Export excludes API keys.
-- No cloud sync, no telemetry.
-- Local application-level encryption is not a substitute for Windows
-  Credential Manager against an administrator-level attacker.
+- No cloud sync, no telemetry, no crash reporting.
+- Local application-level encryption is not a substitute for Windows Credential
+  Manager against an administrator-level attacker.
+
+Your prompts and replies go to the provider **you** configured, and nowhere
+else. If you use an overseas endpoint, your data leaves your machine — that is
+your choice to make, and the app does not hide it.
+
+## Advanced: WorkBuddy integration
+
+If you already run the WorkBuddy desktop app and the local
+`dsh-connect-workbuddy` plugin, OwnChat can read that plugin's **existing local
+credential vault** and reuse its model catalog. It does not create accounts, does
+not proxy through our servers, and does not upload credentials anywhere.
+
+OwnChat is not affiliated with WorkBuddy or Tencent and does not provide, resell
+or share any third-party subscription, quota or account. Use it only with
+accounts you are entitled to use, under that vendor's terms.
+
+## Enterprise and private deployment
+
+OwnChat is a single-process local app, which makes it easy to run inside a
+network that has no route to the public internet: point it at an intranet
+OpenAI-compatible gateway or a local Ollama, and the chat data never leaves the
+machine.
+
+The team build (policy-controlled providers, shared persona packs, audit logs,
+offline model management) is in progress. If you are evaluating OwnChat for an
+organisation, open a discussion or mail the address in the repo profile.
+
+## Screenshots
+
+| Light | Dark |
+|---|---|
+| ![Chat](docs/assets/shots/app-light-chat.png) | ![Chat, dark](docs/assets/shots/app-dark-chat.png) |
+| ![Providers](docs/assets/shots/app-light-providers.png) | ![Providers, dark](docs/assets/shots/app-dark-providers.png) |
+
+More: [`docs/assets/shots/`](docs/assets/shots) — personas and settings, light and dark.
 
 ## Known limitations
 
-- Light theme only (dark theme planned for 0.2.0).
 - Voice is not in the roadmap.
 - File and screenshot sending are not available yet.
+- Very long conversations render in one pass; 1,000+ messages may feel slow.
 - Anthropic Messages and Gemini native protocols are not implemented; use
   OpenRouter or an OpenAI-compatible gateway for Claude.
 - WorkBuddy multi-account auto-rotation is not exposed yet.
 - The installer is unsigned; verify checksums.
 
+Upgrading keeps `data/`. Uninstalling keeps it too — the uninstaller only
+removes the app files and the Edge profile. Delete `data/` by hand for a clean
+wipe.
+
+## FAQ
+
+**Do I need an account?** No. There is no sign-up, no login, no device limit.
+
+**Where does my data go?** Nowhere except the provider you configure. See
+[Privacy](#privacy).
+
+**Is it code-signed?** Not yet. Windows SmartScreen may say "Unknown publisher";
+verify `SHA256SUMS.txt` from the release assets before installing. Code signing
+is planned for `1.0.0`.
+
+**Does it work offline?** Yes, with Ollama or any local OpenAI-compatible server.
+
+**Why AGPL-3.0?** So that improvements to a hosted or resold version come back
+to users. Personal use, modification and self-hosting are unaffected.
+
+**macOS or Linux?** Not planned yet. The local server is portable; the app shell
+is Windows-first.
+
+## Roadmap
+
+See [ROADMAP.md](ROADMAP.md). `0.2.0` (2026-10-22) added the reliability pass:
+account/region UX, per-model capabilities, retry with diagnostics, search,
+archive, export/import, dark theme, and data-preserving upgrades. `0.3.0` moves
+on to attachments and richer chat.
+
+Voice is **not** in the roadmap.
+
+## Contributing
+
+Bug reports and pull requests are welcome — please read
+[CONTRIBUTING.md](.github/CONTRIBUTING.md) first. For security issues, see
+[SECURITY.md](.github/SECURITY.md).
+
 ## License
 
-[MIT](LICENSE) © 2026 KovacBro
+[AGPL-3.0-or-later](LICENSE) © 2026 KovacBro.
 
-OwnChat is not affiliated with WorkBuddy, Tencent, DeepSeek, Zhipu, or any
-model provider. Third-party names are trademarks of their respective owners.
+Versions up to and including `v0.1.0` were released under the MIT license; that
+grant is irrevocable and remains in force for those tags. Starting with `0.2.0`,
+the project is licensed under AGPL-3.0.
+
+OwnChat is not affiliated with WorkBuddy, Tencent, DeepSeek, Zhipu, or any model
+provider. Third-party names are trademarks of their respective owners.
+
+<!-- TODO(marketing): replace the hero screenshot with one that does not show a
+     vendor-branded provider, and add a 10-second demo GIF below. -->

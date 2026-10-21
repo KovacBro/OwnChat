@@ -1,0 +1,69 @@
+name: Bug report
+description: Something is broken in the app
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Please **never paste an API key** — redact it as `sk-***`.
+        For security issues, use
+        [private reporting](https://github.com/KovacBro/OwnChat/security/policy) instead.
+  - type: input
+    id: version
+    attributes:
+      label: OwnChat version
+      description: Settings → 关于, or the installer filename
+      placeholder: 0.2.0
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      placeholder: Windows 11 23H2 (22631)
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Where does it happen
+      options:
+        - Chat / streaming
+        - Provider configuration
+        - Conversation list, search, export
+        - Persona or avatar
+        - Installer or upgrade
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Create a conversation bound to ...
+        2. Send ...
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected vs actual
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Error text or console output
+      description: Redact keys, tokens and personal content.
+      render: text
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I searched existing issues for the same problem
+          required: true
+        - label: I removed API keys and personal content from this report
+          required: true

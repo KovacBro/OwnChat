@@ -1,0 +1,50 @@
+name: Feature request
+description: Suggest a capability or a change in behaviour
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        OwnChat stays small on purpose. Before filing, please check the
+        [roadmap](https://github.com/KovacBro/OwnChat/blob/main/ROADMAP.md)
+        — including the *non-goals* section.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you hitting
+      description: Describe the situation, not the solution.
+      placeholder: Every time I switch from a coding chat to a translation chat I have to ...
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you would like to happen
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What you do today instead
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Which area
+      options:
+        - Chat experience
+        - Provider / model management
+        - Personas and avatars
+        - Data, search, export
+        - Installer / update
+        - Documentation
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: This does not require cloud sync, telemetry, or a bundled API quota
+          required: true
+        - label: I checked the roadmap non-goals
+          required: true

@@ -1,5 +1,5 @@
 param(
-  [string]$Version = "0.1.0"
+  [string]$Version = "0.2.0"
 )
 
 $ErrorActionPreference = "Stop"
@@ -51,7 +51,10 @@ Copy-Item -LiteralPath $nodeLicense -Destination (Join-Path $staging "LICENSE.no
 $pkgPath = Join-Path $staging "package.json"
 $pkg = Get-Content $pkgPath -Raw | ConvertFrom-Json
 $pkg.version = $Version
-$pkg | ConvertTo-Json -Depth 10 | Set-Content $pkgPath -Encoding UTF8
+# -Encoding UTF8 in Windows PowerShell 5.1 writes a BOM, and Node's JSON.parse
+# chokes on it. Write UTF-8 without BOM explicitly.
+$pkgJson = $pkg | ConvertTo-Json -Depth 10
+[System.IO.File]::WriteAllText($pkgPath, $pkgJson, (New-Object System.Text.UTF8Encoding($false)))
 
 # Keep the app icon next to start scripts for the installer and shortcuts.
 Copy-Item -LiteralPath (Join-Path $root "installer\OwnChat.ico") -Destination (Join-Path $staging "OwnChat.ico") -Force

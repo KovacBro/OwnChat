@@ -8,16 +8,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 Only `MAJOR.MINOR.0` releases (0.1.0, 0.2.0, …, 1.0.0) receive installer
 assets on GitHub Releases. Patch releases are source-only.
 
-## [Unreleased] — 0.2.0
+## [0.2.0] — 2026-10-22
 
-### Planned
+Theme: reliable daily driver. No new dependencies, no cloud, no telemetry.
 
-- WorkBuddy account switcher and clearer global/CN region status.
-- Per-model capability editing (vision, context window, reasoning effort).
-- Better provider error diagnostics and one-click retry.
-- Conversation search, archive, export/import.
-- Dark theme.
-- Installer update check and data-preserving upgrade path.
+### Added
+
+- **Dark theme** — follow system, or force light / dark.
+- **Full-text search** across every message, with snippets and jump-to-conversation.
+- **Archive / unarchive** conversations, plus a sidebar switch between active and
+  archived lists.
+- **Per-model capabilities** — vision, context window, max output and reasoning
+  effort, editable per model and preserved when a provider refreshes `/models`.
+- **One-shot automatic retry** for network / 429 / 5xx failures before the first
+  token. A failed turn never produces a duplicate user or assistant message.
+- **Copyable diagnostic code** on every provider error (`EU-<code>-<status>-<id>`).
+- **Token usage** per assistant message (`↑prompt ↓completion`), toggleable.
+- **Context trim notice** when older turns are dropped to fit the model budget.
+- **Conversation export**, **workspace import** (merge, never overwrite) and
+  **bulk delete** with confirmation.
+- **Update check** against GitHub Releases, and the installed version in Settings.
+- Chinese README (`README.zh-CN.md`).
+
+### Changed
+
+- **License: MIT → AGPL-3.0.** Versions up to and including `v0.1.0` stay under
+  MIT; that grant is irrevocable. `0.2.0` and later are AGPL-3.0-or-later.
+- **README rewritten** around "one window for every model, local-first". The
+  third-party integration moved to an advanced section with an explicit
+  disclaimer that OwnChat provides no third-party account, quota or subscription.
+- **Installer upgrade** now stops a running instance before overwriting files
+  (via `taskkill`, no PowerShell dependency) and verifies the target directory is
+  writable before copying, so a permissions problem shows a readable Chinese
+  message instead of `Error 5: 拒绝访问`. `data/` is never touched by install,
+  upgrade or uninstall.
+- Added `scripts/screenshots.ps1` (headless, demo-profile screenshots) and
+  `scripts/release.ps1` (syntax gate → build → tag → `gh release create`).
+- **Model list refresh** merges into the stored list instead of replacing it, so
+  hand-edited capabilities survive.
+- **WorkBuddy provider cards** show region, account, token expiry and model count.
+- Added `.github/` community files: issue forms, CONTRIBUTING (no dependencies,
+  no telemetry, no third-party quota features, `127.0.0.1` only) and SECURITY.
+
+### Notes
+
+- Smoke-test pass on a real Windows install is still required; this changelog
+  describes the implementation, not a verified build.
 
 See [ROADMAP.md](ROADMAP.md) for scope, non-goals, and acceptance criteria.
 
@@ -78,5 +114,6 @@ First public baseline. Windows x64 installer:
 - WorkBuddy multi-account auto-rotation is not exposed in OwnChat yet.
 - No cloud sync; data stays on the local machine.
 
-[Unreleased]: https://github.com/KovacBro/OwnChat/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/KovacBro/OwnChat/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/KovacBro/OwnChat/releases/tag/v0.2.0
 [0.1.0]: https://github.com/KovacBro/OwnChat/releases/tag/v0.1.0

@@ -10,6 +10,8 @@ dist/
 
 # local dev tools / scratch
 scripts/
+docs/内部/
+docs/assets/xhs/
 docs/.edge-*/
 docs/avatar-test/
 docs/OwnChat-*.md
