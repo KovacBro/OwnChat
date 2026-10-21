@@ -135,6 +135,7 @@ See [docs/RELEASING.md](docs/RELEASING.md) for the release checklist.
 ## Roadmap
 
 - [0.2.0 — Reliable daily driver](ROADMAP.md)
+- [0.2.0 milestone and issues](https://github.com/KovacBro/OwnChat/milestone/1)
 - Later: attachments, workflows, parallel generation, stable 1.0.
 
 0.2.0 focuses on WorkBuddy account/region UX, per-model capabilities,
