@@ -24,7 +24,11 @@ const DOWNLOADER = new WorkBuddyDownloader();
 const SETTINGS = {
   host: "127.0.0.1",
   basePort: Number(process.env.OWNCHAT_PORT) || 17321,
+  // --open  : launch a window AND quit when it closes
+  // --managed: only quit when the window closes; the launcher opens the window
+  //            itself, so the window has exactly one owner
   open: process.argv.includes("--open"),
+  managed: process.argv.includes("--open") || process.argv.includes("--managed"),
 };
 // Demo mode: skip the third-party integration entirely so screenshots and tests
 // never pick up a developer's real signed-in account.
@@ -745,7 +749,7 @@ async function handleApi(req, res, url) {
   }
 
   if (req.method === "POST" && pathname === "/api/app/closed") {
-    if (SETTINGS.open && !STORE.settings().keepRunning) {
+    if (SETTINGS.managed && !STORE.settings().keepRunning) {
       clearTimeout(appCloseTimer);
       appCloseTimer = setTimeout(() => {
         log("OwnChat window closed; shutting down");

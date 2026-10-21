@@ -52,6 +52,9 @@ Theme: reliable daily driver. No new dependencies, no cloud, no telemetry.
 
 ### Fixed
 
+- A cold start opened **two** windows: the launcher opened one and
+  `node server.js --open` opened another. The launcher is now the only owner of
+  the window; the server only watches whether it is still open.
 - Desktop shortcut is created by default. It used to be opt-in, so most users
   never found it and only had the Start Menu entry.
 - The app window and taskbar now use the OwnChat icon instead of a persona

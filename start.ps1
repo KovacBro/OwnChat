@@ -29,7 +29,7 @@ if (-not $alive) {
   if (-not (Test-Path $node)) { $node = "node" }
   $outLog = Join-Path $root "data\server.log"
   $errLog = Join-Path $root "data\server.err.log"
-  Start-Process -FilePath $node -ArgumentList @("server.js", "--open") -WorkingDirectory $root -WindowStyle Hidden `
+  Start-Process -FilePath $node -ArgumentList @("server.js", "--managed") -WorkingDirectory $root -WindowStyle Hidden `
     -RedirectStandardOutput $outLog -RedirectStandardError $errLog
   Start-Sleep -Seconds 2
   if (Test-Path $runtime) {
