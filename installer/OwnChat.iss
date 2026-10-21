@@ -11,7 +11,7 @@
 ;   stop with a readable message instead of a raw Win32 error.
 
 #ifndef MyAppVersion
-  #define MyAppVersion "0.2.1"
+  #define MyAppVersion "0.2.2"
 #endif
 
 #define MyAppName "OwnChat"

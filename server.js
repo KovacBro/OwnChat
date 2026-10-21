@@ -250,11 +250,16 @@ function modelInfo(provider, modelId) {
 
 function modelCapabilities(provider, modelId) {
   const info = modelInfo(provider, modelId) || {};
+  const effort = typeof info.reasoningEffort === "string"
+    ? info.reasoningEffort
+    : typeof provider?.reasoningEffort === "string"
+      ? provider.reasoningEffort
+      : "";
   return {
     vision: info.vision !== undefined ? Boolean(info.vision) : Boolean(provider?.supportsVision),
     contextWindow: Number(info.contextWindow) || Number(provider?.contextWindow) || 128000,
     maxOutput: Number(info.maxOutput || info.maxTokens) || Number(provider?.maxTokens) || 4096,
-    reasoningEffort: info.reasoningEffort || provider?.reasoningEffort || "",
+    reasoningEffort: effort,
   };
 }
 

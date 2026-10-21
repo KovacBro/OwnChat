@@ -1,5 +1,5 @@
 param(
-  [string]$Version = "0.2.1",
+  [string]$Version = "0.2.2",
   # Patch releases are source-only by default; this switch is the documented
   # escape hatch for a patch that still needs an in-place upgrade path.
   [switch]$AllowPatchInstaller

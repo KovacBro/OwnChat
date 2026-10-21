@@ -8,6 +8,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 Only `MAJOR.MINOR.0` releases (0.1.0, 0.2.0, …, 1.0.0) receive installer
 assets on GitHub Releases. Patch releases are source-only.
 
+## [0.2.2] — 2026-10-22
+
+修复 0.2.0 引入的回归：WorkBuddy 模型的「推理强度」被整个对象塞进了请求体，
+上游直接拒绝，聊天发不出去。
+
+报错长这样：`请求内容不合法，请重试（code 11101，requestId …）`。
+
+### Fixed
+
+- 上游返回的 `reasoningEffort` 是对象
+  （`{supportedEfforts, defaultEffort, canDisableThinking}`），0.2.0 起被原样写进
+  `reasoning_effort` 字段。现在只有**字符串**才会被发送，对象一律丢弃。
+- 读取模型列表、组装请求、两个协议适配器（WorkBuddy / OpenAI）三处都加了类型判断，
+  任何一层漏掉都不会再发出去。
+- 加载旧数据时自动清洗：0.2.0 / 0.2.1 存过的 `reasoningEffort` 对象会被置空，
+  用户不需要手动改配置或重新拉取模型。
+
+### Notes
+
+- 只影响升级过 0.2.0 / 0.2.1 的 WorkBuddy 用户；0.1.0 不受影响。
+- 修复后实测：同一账号、同一模型，21 个模型全部可正常流式返回。
+
 ## [0.2.1] — 2026-10-22
 
 三个国内平台的直连预设。它们**独立于「娘」人格**存在：用默认助手人格，
@@ -159,7 +181,8 @@ First public baseline. Windows x64 installer:
 - WorkBuddy multi-account auto-rotation is not exposed in OwnChat yet.
 - No cloud sync; data stays on the local machine.
 
-[Unreleased]: https://github.com/KovacBro/OwnChat/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/KovacBro/OwnChat/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/KovacBro/OwnChat/releases/tag/v0.2.2
 [0.2.1]: https://github.com/KovacBro/OwnChat/releases/tag/v0.2.1
 [0.2.0]: https://github.com/KovacBro/OwnChat/releases/tag/v0.2.0
 [0.1.0]: https://github.com/KovacBro/OwnChat/releases/tag/v0.1.0
